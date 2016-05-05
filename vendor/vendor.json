@@ -1,0 +1,115 @@
+{
+	"comment": "",
+	"ignore": "test",
+	"package": [
+		{
+			"checksumSHA1": "SnTUzwYa4snkJ/HQWcvxCnbw2eY=",
+			"path": "github.com/coreos/etcd/Godeps/_workspace/src/github.com/ugorji/go/codec",
+			"revision": "b3d9196021a5f0235969f9d597a85561e3da4aab",
+			"revisionTime": "2015-12-09T19:01:47Z"
+		},
+		{
+			"checksumSHA1": "368DwFDT+Mei+l+xkYA1oNkxkVo=",
+			"path": "github.com/coreos/etcd/Godeps/_workspace/src/golang.org/x/net/context",
+			"revision": "b3d9196021a5f0235969f9d597a85561e3da4aab",
+			"revisionTime": "2015-12-09T19:01:47Z"
+		},
+		{
+			"checksumSHA1": "UKDVQEk+8QTukq3f6RrjHOVjcsc=",
+			"path": "github.com/coreos/etcd/client",
+			"revision": "b3d9196021a5f0235969f9d597a85561e3da4aab",
+			"revisionTime": "2015-12-09T19:01:47Z"
+		},
+		{
+			"checksumSHA1": "mKIXx1kDwmVmdIpZ3pJtRBuUKso=",
+			"path": "github.com/coreos/etcd/pkg/pathutil",
+			"revision": "b3d9196021a5f0235969f9d597a85561e3da4aab",
+			"revisionTime": "2015-12-09T19:01:47Z"
+		},
+		{
+			"checksumSHA1": "dMR9ipwCbX5eIPnvLXiPUM65/0s=",
+			"path": "github.com/coreos/etcd/pkg/types",
+			"revision": "b3d9196021a5f0235969f9d597a85561e3da4aab",
+			"revisionTime": "2015-12-09T19:01:47Z"
+		},
+		{
+			"checksumSHA1": "I8m7djNCyU/e6v8YhKBlQUVnReA=",
+			"path": "github.com/docker/libkv",
+			"revision": "93099f38de7421e6979983652730a81e2bafd578",
+			"revisionTime": "2015-11-05T22:55:53Z"
+		},
+		{
+			"checksumSHA1": "3SXm8a8FRo7wjuNFKrimyfncung=",
+			"path": "github.com/docker/libkv/store",
+			"revision": "93099f38de7421e6979983652730a81e2bafd578",
+			"revisionTime": "2015-11-05T22:55:53Z"
+		},
+		{
+			"checksumSHA1": "H+WRcqlbi0XvCEG2fvRiwvsqi+U=",
+			"path": "github.com/docker/libkv/store/etcd",
+			"revision": "93099f38de7421e6979983652730a81e2bafd578",
+			"revisionTime": "2015-11-05T22:55:53Z"
+		},
+		{
+			"checksumSHA1": "Farach1xcmsQYrhiUfkwF2rbIaE=",
+			"path": "github.com/julienschmidt/httprouter",
+			"revision": "6aacfd5ab513e34f7e64ea9627ab9670371b34e7",
+			"revisionTime": "2015-07-08T21:54:00Z"
+		},
+		{
+			"checksumSHA1": "yj8KD7zx2Z+JHR+VelvojuSDurk=",
+			"path": "github.com/mijia/adoc",
+			"revision": "b13894c1c54204ed818a345d2a5d7fc30f0c7239",
+			"revisionTime": "2016-04-26T01:22:07Z"
+		},
+		{
+			"checksumSHA1": "o7e6f7Ddy7KDm4JNxs01gBN6DJc=",
+			"path": "github.com/mijia/go-generics",
+			"revision": "2278a5f0de143e1d17ea16d56e7f85391bdb85a3",
+			"revisionTime": "2015-07-20T08:10:04Z"
+		},
+		{
+			"checksumSHA1": "SQFsZCd01i85AnwYAwZMwsZwiQY=",
+			"path": "github.com/mijia/sweb/form",
+			"revision": "14329ad4fe2a6f7a337bb9518127dc9982134a54",
+			"revisionTime": "2015-07-27T04:29:36Z"
+		},
+		{
+			"checksumSHA1": "EskkDWg/7RcNa16FCA5qHNlGvQg=",
+			"path": "github.com/mijia/sweb/log",
+			"revision": "14329ad4fe2a6f7a337bb9518127dc9982134a54",
+			"revisionTime": "2015-07-27T04:29:36Z"
+		},
+		{
+			"checksumSHA1": "oNdkn+zqacHWHyVqds4zmMtiqi4=",
+			"path": "github.com/mijia/sweb/server",
+			"revision": "14329ad4fe2a6f7a337bb9518127dc9982134a54",
+			"revisionTime": "2015-07-27T04:29:36Z"
+		},
+		{
+			"checksumSHA1": "iUUSdB1BeJiNn7mxqhfSg7tMrtc=",
+			"path": "github.com/paulbellamy/ratecounter",
+			"revision": "1f4ce68ee3b891b625b7fe6374f61c4d90c8035a",
+			"revisionTime": "2014-10-12T10:34:00Z"
+		},
+		{
+			"checksumSHA1": "UWnxVzy4kl/NFHV08fhVQpwONwM=",
+			"path": "github.com/stretchr/graceful",
+			"revision": "ac9ebe4f1ee151ac1eeeaef32957085cba64d508",
+			"revisionTime": "2015-06-17T15:40:04Z"
+		},
+		{
+			"checksumSHA1": "pancewZW3HwGvpDwfH5Imrbadc4=",
+			"path": "golang.org/x/net/context",
+			"revision": "b797637b7aeeed133049c7281bfa31dcc9ca42d6",
+			"revisionTime": "2016-04-22T22:19:27Z"
+		},
+		{
+			"checksumSHA1": "7WASrg0PEueWDDRHkFhEEN6Qrms=",
+			"path": "golang.org/x/net/netutil",
+			"revision": "b797637b7aeeed133049c7281bfa31dcc9ca42d6",
+			"revisionTime": "2016-04-22T22:19:27Z"
+		}
+	],
+	"rootPath": "github.com/laincloud/deployd"
+}

@@ -1,0 +1,6 @@
+{
+    "cpu": 0,
+    "expose": 5000,
+    "num_instances": 2,
+    "memory": "256m"
+}

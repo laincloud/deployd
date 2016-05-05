@@ -1,0 +1,8 @@
+{
+    "image": "training/webapp",
+    "command": ["python", "app.py"],
+    "expose": 5000,
+    "num_instances": 1,
+    "cpu": 1,
+    "memory": "512m"
+}
