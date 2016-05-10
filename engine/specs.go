@@ -183,6 +183,7 @@ func (pps PodPrevState) Clone() PodPrevState {
 
 type PodSpec struct {
 	ImSpec
+	Network      string
 	Containers   []ContainerSpec
 	Filters      []string // for cluster scheduling
 	Dependencies []Dependency

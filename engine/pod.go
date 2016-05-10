@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/laincloud/deployd/cluster"
 	"github.com/mijia/adoc"
 	"github.com/mijia/go-generics"
 	"github.com/mijia/sweb/log"
-	"github.com/laincloud/deployd/cluster"
 )
 
 // podController is controlled by the podGroupController
@@ -244,7 +244,11 @@ func (pc *podController) refreshContainer(kluster cluster.Cluster, index int) {
 			pc.pod.LastError = fmt.Sprintf("Cannot inspect the container, %s", err)
 		}
 	} else {
-		prevIP, nowIP := pc.spec.PrevState.IPs[index], info.NetworkSettings.Networks[pc.spec.Namespace].IPAddress
+		network := pc.spec.Network
+		if network == "" {
+			network = pc.spec.Namespace
+		}
+		prevIP, nowIP := pc.spec.PrevState.IPs[index], info.NetworkSettings.Networks[network].IPAddress
 
 		// NOTE: if the container's ip is not equal to prev ip, try to correct it; if failed, accpet new ip
 		if prevIP != "" && prevIP != nowIP {
@@ -382,7 +386,10 @@ func (pc *podController) createHostConfig(index int) adoc.HostConfig {
 		hc.Binds = binds
 	}
 	hc.Binds = append(hc.Binds, spec.SystemVolumes...)
-	hc.NetworkMode = podSpec.Namespace
+	hc.NetworkMode = podSpec.Network
+	if hc.NetworkMode == "" {
+		hc.NetworkMode = podSpec.Namespace
+	}
 	if len(spec.DnsSearch) > 0 {
 		hc.DnsSearch = generics.Clone_StringSlice(spec.DnsSearch)
 	}
@@ -404,7 +411,10 @@ func (pc *podController) createContainerName(index int) string {
 
 func (pc *podController) createNetworkingConfig(index int) adoc.NetworkingConfig {
 	podSpec := pc.spec
-	net := podSpec.Namespace
+	net := podSpec.Network
+	if net == "" {
+		net = podSpec.Namespace
+	}
 	nc := adoc.NetworkingConfig{}
 	ipamc := adoc.IPAMConfig{}
 	ipamc.IPv4Address = pc.spec.PrevState.IPs[index]

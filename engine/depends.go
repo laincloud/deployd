@@ -179,6 +179,7 @@ func (depCtrl *dependsController) VerifyPod(namespace, nodeName string) {
 	depCtrl.RLock()
 	spec := depCtrl.spec.Clone()
 	depCtrl.RUnlock()
+	depCtrl.opsChan <- depOperSnapshotEagleView{spec}
 	depCtrl.opsChan <- depOperVerifyPod{spec, namespace, nodeName}
 	depCtrl.opsChan <- depOperStoreSavePods{spec}
 }
@@ -230,7 +231,8 @@ func (depCtrl *dependsController) specifyPodSpec(spec PodSpec, nodeName, namespa
 		newContainers = append(newContainers, container)
 	}
 	spec.Containers = newContainers
-	spec.Namespace = fmt.Sprintf("%s_%s", spec.Name, namespace)
+	spec.Namespace = spec.Name
+	spec.Network = fmt.Sprintf("%s_%s", spec.Name, namespace)
 	spec.PrevState = NewPodPrevState(1)
 	spec.Name = fmt.Sprintf("%s-%s-%s", spec.Name, nodeName, namespace)
 	newFilters := make([]string, 0, len(spec.Filters))
