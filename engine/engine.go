@@ -13,10 +13,7 @@ import (
 	"github.com/mijia/sweb/log"
 )
 
-const (
-	kDefaultRefreshInterval = 90
-	kMinRefreshInterval     = 20
-)
+var RefreshInterval int
 
 var (
 	ErrPodGroupExists         = errors.New("PodGroup has already existed")
@@ -325,7 +322,7 @@ func (engine *OrcEngine) initPodGroupCtrl(spec PodGroupSpec, states []PodPrevSta
 
 // This will be running inside the go routine
 func (engine *OrcEngine) initOperationWorker() {
-	tick := time.Tick(kDefaultRefreshInterval * time.Second)
+	tick := time.Tick(time.Duration(RefreshInterval) * time.Second)
 	for {
 		select {
 		case op := <-engine.opsChan:
@@ -333,7 +330,7 @@ func (engine *OrcEngine) initOperationWorker() {
 		case <-tick:
 			engine.RLock()
 			if len(engine.pgCtrls) > 0 {
-				rInterval := kDefaultRefreshInterval / 2 * 1000 / len(engine.pgCtrls)
+				rInterval := RefreshInterval / 2 * 1000 / len(engine.pgCtrls)
 				index := 0
 				for _, pgCtrl := range engine.pgCtrls {
 					interval := index * rInterval
@@ -347,7 +344,7 @@ func (engine *OrcEngine) initOperationWorker() {
 				}
 			}
 			if len(engine.dependsCtrls) > 0 {
-				rInterval := kDefaultRefreshInterval / 2 * 1000 / len(engine.dependsCtrls)
+				rInterval := RefreshInterval / 2 * 1000 / len(engine.dependsCtrls)
 				index := 0
 				for _, depCtrl := range engine.dependsCtrls {
 					interval := index * rInterval

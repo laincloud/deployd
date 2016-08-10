@@ -158,9 +158,9 @@ func (op depOperRefresh) Do(depCtrl *dependsController, c cluster.Cluster, store
 		for namespace, podCtrl := range nsPodCtrls {
 			lastVerify := podCtrl.verifyTime
 			refCount := podCtrl.refCount
-			if depCtrl.startedAt.Add(kDependsGarbageCollectTimeout).Before(time.Now()) {
+			if depCtrl.startedAt.Add(DependsGarbageCollectTimeout).Before(time.Now()) {
 				// we have enough time for the podgroups to re verify their depends
-				if lastVerify.Add(kDependsGarbageCollectTimeout).Before(time.Now()) {
+				if lastVerify.Add(DependsGarbageCollectTimeout).Before(time.Now()) {
 					log.Warnf("DependsCtrl %s, found pod not verified for a long time, pod=%s, last verifyTime=%s, refCount=%d",
 						op.spec, podCtrl.spec.Name, lastVerify, refCount)
 					// we need make sure the depend not refered by any other pods

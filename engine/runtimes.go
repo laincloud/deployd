@@ -8,9 +8,7 @@ import (
 
 type RunState int
 
-const (
-	RestartMaxCount = 3
-)
+var RestartMaxCount int
 
 const (
 	RunStatePending = iota

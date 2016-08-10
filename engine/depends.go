@@ -10,12 +10,10 @@ import (
 	"github.com/laincloud/deployd/storage"
 )
 
-const (
-	// set GarbageCollectTimeout long enough.
-	// sometimes, podgroup refresh goroutine may having some problem(such as swarm exception),
-	// and do not verify it's portal for a long time. 5 minute is enough
-	kDependsGarbageCollectTimeout = 5 * time.Minute
-)
+// set GarbageCollectTimeout long enough.
+// sometimes, podgroup refresh goroutine may having some problem(such as swarm exception),
+// and do not verify it's portal for a long time
+var DependsGarbageCollectTimeout time.Duration
 
 type NamespacePodsWithSpec struct {
 	Spec PodSpec
