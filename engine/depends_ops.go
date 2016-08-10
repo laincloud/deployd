@@ -136,6 +136,7 @@ func (op depOperUpgradeInstance) Do(depCtrl *dependsController, c cluster.Cluste
 	newSpec := depCtrl.specifyPodSpec(op.newSpec, op.node, op.namespace)
 	podCtrl.spec = newSpec
 	podCtrl.pod.State = RunStatePending
+	podCtrl.pod.RestartCount = 0
 	deployOp := depOperDeployInstance{podCtrl}
 	deployOp.Do(depCtrl, c, store, ev)
 	return false
@@ -157,9 +158,9 @@ func (op depOperRefresh) Do(depCtrl *dependsController, c cluster.Cluster, store
 		for namespace, podCtrl := range nsPodCtrls {
 			lastVerify := podCtrl.verifyTime
 			refCount := podCtrl.refCount
-			if depCtrl.startedAt.Add(kDependsGarbageCollectTimeout).Before(time.Now()) {
+			if depCtrl.startedAt.Add(DependsGarbageCollectTimeout).Before(time.Now()) {
 				// we have enough time for the podgroups to re verify their depends
-				if lastVerify.Add(kDependsGarbageCollectTimeout).Before(time.Now()) {
+				if lastVerify.Add(DependsGarbageCollectTimeout).Before(time.Now()) {
 					log.Warnf("DependsCtrl %s, found pod not verified for a long time, pod=%s, last verifyTime=%s, refCount=%d",
 						op.spec, podCtrl.spec.Name, lastVerify, refCount)
 					// we need make sure the depend not refered by any other pods
@@ -371,7 +372,7 @@ func (op depOperRefreshInstance) Do(depCtrl *dependsController, c cluster.Cluste
 		return false
 	}
 
-	if runtime.State == RunStateExit || runtime.State == RunStateFail {
+	if podCtrl.pod.NeedRestart(RestartPolicyAlways) && !podCtrl.pod.RestartEnoughTimes() {
 		log.Warnf("DependsCtrl %s, we found pod down, just restart it", op.spec)
 		podCtrl.Start(c)
 		runtime = podCtrl.pod.ImRuntime

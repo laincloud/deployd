@@ -8,8 +8,10 @@ import (
 	"runtime"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/laincloud/deployd/apiserver"
+	"github.com/laincloud/deployd/engine"
 	"github.com/laincloud/deployd/utils/elector"
 	"github.com/laincloud/deployd/utils/proxy"
 	"github.com/mijia/sweb/log"
@@ -22,11 +24,15 @@ const (
 func main() {
 	var webAddr, swarmAddr, etcdAddr, advertise string
 	var isDebug, version bool
+	var refreshInterval, dependsGCTime, maxRestartTimes int
 
 	flag.StringVar(&advertise, "advertise", "", "The address advertise to other peers, this will open HA mode")
 	flag.StringVar(&webAddr, "web", ":9000", "The address which lain-deployd is listenning on")
 	flag.StringVar(&swarmAddr, "swarm", "", "The tcp://<SWRAM_IP>:<SWARM_PORT> address that Swarm master is deployed")
 	flag.StringVar(&etcdAddr, "etcd", "", "The etcd cluster access points, e.g. http://127.0.0.1:4001")
+	flag.IntVar(&dependsGCTime, "dependsGCTime", 5, "The depends garbage collection time (minutes)")
+	flag.IntVar(&refreshInterval, "refreshInterval", 90, "The refresh interval time (seconds)")
+	flag.IntVar(&maxRestartTimes, "maxRestartTimes", 3, "The max restart times for pod")
 	flag.BoolVar(&isDebug, "debug", false, "Debug mode switch")
 	flag.BoolVar(&version, "v", false, "Show version")
 	flag.Parse()
@@ -42,6 +48,10 @@ func main() {
 	if isDebug {
 		log.EnableDebug()
 	}
+
+	engine.DependsGarbageCollectTimeout = time.Duration(dependsGCTime) * time.Minute
+	engine.RefreshInterval = refreshInterval
+	engine.RestartMaxCount = maxRestartTimes
 
 	server := apiserver.New(swarmAddr, etcdAddr, isDebug)
 

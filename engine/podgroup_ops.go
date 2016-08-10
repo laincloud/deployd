@@ -106,6 +106,7 @@ func (op pgOperUpgradeInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 	}
 	podCtrl.spec = newPodSpec
 	podCtrl.pod.State = RunStatePending
+	podCtrl.pod.RestartCount = 0
 	lowOp = pgOperDeployInstance{op.instanceNo, op.version}
 	lowOp.Do(pgCtrl, c, store, ev)
 	return false
@@ -196,7 +197,7 @@ func (op pgOperRefreshInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 		runtime = podCtrl.pod.ImRuntime
 		return false
 	}
-	if podCtrl.pod.NeedRestart(op.spec.RestartPolicy) {
+	if podCtrl.pod.NeedRestart(op.spec.RestartPolicy) && !podCtrl.pod.RestartEnoughTimes() {
 		log.Warnf("PodGroupCtrl %s, we found pod down, just restart it", op.spec)
 		podCtrl.Start(c)
 		runtime = podCtrl.pod.ImRuntime

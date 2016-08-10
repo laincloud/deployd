@@ -8,6 +8,8 @@ import (
 
 type RunState int
 
+var RestartMaxCount int
+
 const (
 	RunStatePending = iota
 	RunStateDrift
@@ -43,10 +45,11 @@ func (rs RunState) String() string {
 }
 
 type ImRuntime struct {
-	State      RunState
-	LastError  string
-	DriftCount int
-	UpdatedAt  time.Time
+	State        RunState
+	LastError    string
+	DriftCount   int
+	RestartCount int
+	UpdatedAt    time.Time
 }
 
 type Container struct {
@@ -124,6 +127,10 @@ func (pod Pod) NeedRestart(policy RestartPolicy) bool {
 		return state == RunStateFail
 	}
 	return false
+}
+
+func (pod Pod) RestartEnoughTimes() bool {
+	return pod.RestartCount >= RestartMaxCount
 }
 
 func (pod Pod) NodeName() string {

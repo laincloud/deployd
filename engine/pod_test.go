@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mijia/sweb/log"
 	"github.com/laincloud/deployd/cluster/swarm"
 	"github.com/laincloud/deployd/storage/etcd"
+	"github.com/mijia/sweb/log"
 )
 
 func TestPodController(t *testing.T) {
