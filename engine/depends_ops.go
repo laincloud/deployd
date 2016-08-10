@@ -136,6 +136,7 @@ func (op depOperUpgradeInstance) Do(depCtrl *dependsController, c cluster.Cluste
 	newSpec := depCtrl.specifyPodSpec(op.newSpec, op.node, op.namespace)
 	podCtrl.spec = newSpec
 	podCtrl.pod.State = RunStatePending
+	podCtrl.pod.RestartCount = 0
 	deployOp := depOperDeployInstance{podCtrl}
 	deployOp.Do(depCtrl, c, store, ev)
 	return false
@@ -371,7 +372,7 @@ func (op depOperRefreshInstance) Do(depCtrl *dependsController, c cluster.Cluste
 		return false
 	}
 
-	if runtime.State == RunStateExit || runtime.State == RunStateFail {
+	if podCtrl.pod.NeedRestart(RestartPolicyAlways) && !podCtrl.pod.RestartEnoughTimes() {
 		log.Warnf("DependsCtrl %s, we found pod down, just restart it", op.spec)
 		podCtrl.Start(c)
 		runtime = podCtrl.pod.ImRuntime

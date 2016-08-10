@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mijia/adoc"
-	"github.com/mijia/sweb/log"
 	"github.com/laincloud/deployd/cluster"
 	"github.com/laincloud/deployd/storage"
+	"github.com/mijia/adoc"
+	"github.com/mijia/sweb/log"
 )
 
 const (

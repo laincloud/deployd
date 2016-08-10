@@ -184,6 +184,7 @@ func (pc *podController) Start(cluster cluster.Cluster) {
 			pc.refreshContainer(cluster, i)
 		}
 	}
+	pc.pod.RestartCount += 1
 	pc.pod.UpdatedAt = time.Now()
 }
 
