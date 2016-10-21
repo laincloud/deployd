@@ -45,8 +45,8 @@ type ContainerLabel struct {
 	Annotation     string
 }
 
-func (label ContainerLabel) NameAffnity() string {
-	return fmt.Sprintf("affnity:%s.pg_name!=~%s", kLainLabelPrefix, label.Name)
+func (label ContainerLabel) NameAffinity() string {
+	return fmt.Sprintf("affinity:%s.pg_name!=~%s", kLainLabelPrefix, label.Name)
 }
 
 func (label ContainerLabel) Label2Maps() map[string]string {
