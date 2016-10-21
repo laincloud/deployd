@@ -43,7 +43,7 @@ func (pc *podController) Deploy(cluster cluster.Cluster) {
 	containerLabel := ContainerLabel{
 		Name: pc.spec.Name,
 	}
-	filters = append(filters, containerLabel.NameAffnity())
+	filters = append(filters, containerLabel.NameAffinity())
 	for i, cSpec := range pc.spec.Containers {
 		log.Infof("%s create container, filter is %v", pc, filters)
 		id, err := pc.createContainer(cluster, filters, i)
