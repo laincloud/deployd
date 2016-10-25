@@ -29,7 +29,7 @@ func (rc RestfulConstraints) Patch(ctx context.Context, r *http.Request) (int, i
 	cstType := form.ParamString(r, "type", "")
 	cstValue := form.ParamString(r, "value", "")
 	equal := form.ParamBoolean(r, "equal", false)
-	force := form.ParamBoolean(r, "force", false)
+	soft := form.ParamBoolean(r, "soft", true)
 
 	if cstType == "" {
 		return http.StatusBadRequest, "constaint type required"
@@ -38,7 +38,7 @@ func (rc RestfulConstraints) Patch(ctx context.Context, r *http.Request) (int, i
 		return http.StatusBadRequest, "constraint value required"
 	}
 
-	constraint := engine.ConstraintSpec{cstType, equal, cstValue, force}
+	constraint := engine.ConstraintSpec{cstType, equal, cstValue, soft}
 
 	if err := getEngine(ctx).UpdateConstraints(constraint); err != nil {
 		return http.StatusInternalServerError, err.Error()

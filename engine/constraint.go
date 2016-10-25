@@ -12,7 +12,7 @@ type ConstraintSpec struct {
 	Type  string
 	Equal bool
 	Value string
-	Force bool
+	Soft  bool
 }
 
 type constraintController struct {
@@ -51,14 +51,14 @@ func (cc *constraintController) LoadConstraints(store storage.Store) error {
 }
 
 func (cc *constraintController) LoadFilterFromConstrain(cstSpec ConstraintSpec) string {
-	operator, force := "==", ""
+	operator := "=="
 	if !cstSpec.Equal {
 		operator = "!="
 	}
-	if !cstSpec.Force {
-		force = "~"
+	if cstSpec.Soft {
+		operator += "~"
 	}
-	return fmt.Sprintf("constraint:%s%s%s%s", cstSpec.Type, operator, force, cstSpec.Value)
+	return fmt.Sprintf("constraint:%s%s%s", cstSpec.Type, operator, cstSpec.Value)
 }
 
 func (cc *constraintController) GetAllConstraints() map[string]ConstraintSpec {
