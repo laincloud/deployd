@@ -15,6 +15,8 @@ import (
 
 var RefreshInterval int
 
+var cstController *constraintController
+
 var (
 	ErrPodGroupExists         = errors.New("PodGroup has already existed")
 	ErrPodGroupNotExists      = errors.New("PodGroup not existed")
@@ -22,6 +24,7 @@ var (
 	ErrNotEnoughResources     = errors.New("Not enough CPUs and Memory to use")
 	ErrDependencyPodExists    = errors.New("DependencyPod has already existed")
 	ErrDependencyPodNotExists = errors.New("DependencyPod not existed")
+	ErrConstraintNotExists    = errors.New("Constraint not existed")
 )
 
 type OrcEngine struct {
@@ -429,6 +432,22 @@ func (engine *OrcEngine) DriftNode(fromNode, toNode string, pgName string, pgIns
 	// so far we just wait for the dependsCtrl to react to the events
 }
 
+func (engine *OrcEngine) GetConstraints(cstType string) (ConstraintSpec, bool) {
+	return cstController.GetConstraint(cstType)
+}
+
+func (engine *OrcEngine) UpdateConstraints(spec ConstraintSpec) error {
+	return cstController.SetConstraint(spec, engine.store)
+}
+
+func (engine *OrcEngine) DeleteConstraints(cstType string) error {
+	if _, ok := cstController.GetConstraint(cstType); !ok {
+		return ErrConstraintNotExists
+	} else {
+		return cstController.RemoveConstraint(cstType, engine.store)
+	}
+}
+
 func (engine *OrcEngine) onClusterNodeLost(nodeName string) {
 	log.Warnf("Cluster node is down, [%q], will notify pod group controller to drift", nodeName)
 	engine.DriftNode(nodeName, "", "", -1, false)
@@ -479,6 +498,11 @@ func New(cluster cluster.Cluster, store storage.Store) (*OrcEngine, error) {
 	//return nil, err
 	//}
 	engine.eagleView = eagleView
+
+	cstController = NewConstraintController()
+	if err := cstController.LoadConstraints(engine.store); err != nil {
+		return nil, err
+	}
 
 	if err := engine.LoadDependsPods(); err != nil {
 		return nil, err

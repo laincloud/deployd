@@ -3,13 +3,13 @@ package apiserver
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/laincloud/deployd/cluster/swarm"
+	"github.com/laincloud/deployd/engine"
+	setcd "github.com/laincloud/deployd/storage/etcd"
 	"github.com/mijia/adoc"
 	"github.com/mijia/sweb/log"
 	"github.com/mijia/sweb/server"
 	"golang.org/x/net/context"
-	"github.com/laincloud/deployd/cluster/swarm"
-	"github.com/laincloud/deployd/engine"
-	setcd "github.com/laincloud/deployd/storage/etcd"
 	"net/http"
 	"time"
 )
@@ -55,6 +55,7 @@ func (s *Server) ListenAndServe(addr string) error {
 	s.AddRestfulResource("/api/depends", "RestfulDependPods", RestfulDependPods{})
 	s.AddRestfulResource("/api/nodes", "RestfulNodes", RestfulNodes{})
 	s.AddRestfulResource("/api/status", "RestfulStatus", RestfulStatus{})
+	s.AddRestfulResource("/api/constraints", "RestfulConstraints", RestfulConstraints{})
 
 	s.Get("/debug/vars", "RuntimeStat", s.getRuntimeStat)
 	s.NotFound(func(ctx context.Context, w http.ResponseWriter, r *http.Request) context.Context {
