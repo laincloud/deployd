@@ -15,7 +15,7 @@ import (
 
 var RefreshInterval int
 
-var CstController *constraintController
+var cstController *constraintController
 
 var (
 	ErrPodGroupExists         = errors.New("PodGroup has already existed")
@@ -433,18 +433,18 @@ func (engine *OrcEngine) DriftNode(fromNode, toNode string, pgName string, pgIns
 }
 
 func (engine *OrcEngine) GetConstraints(cstType string) (ConstraintSpec, bool) {
-	return CstController.GetConstraint(cstType)
+	return cstController.GetConstraint(cstType)
 }
 
 func (engine *OrcEngine) UpdateConstraints(spec ConstraintSpec) error {
-	return CstController.SetConstraint(spec, engine.store)
+	return cstController.SetConstraint(spec, engine.store)
 }
 
 func (engine *OrcEngine) DeleteConstraints(cstType string) error {
-	if _, ok := CstController.GetAllConstraints(cstType); !ok {
+	if _, ok := cstController.GetConstraint(cstType); !ok {
 		return ErrConstraintNotExists
 	} else {
-		return CstController.RemoveConstraint(cstType, engine.store)
+		return cstController.RemoveConstraint(cstType, engine.store)
 	}
 }
 
@@ -499,8 +499,8 @@ func New(cluster cluster.Cluster, store storage.Store) (*OrcEngine, error) {
 	//}
 	engine.eagleView = eagleView
 
-	CstController = NewConstraintController()
-	if err := CstController.LoadConstraints(engine.store); err != nil {
+	cstController = NewConstraintController()
+	if err := cstController.LoadConstraints(engine.store); err != nil {
 		return nil, err
 	}
 

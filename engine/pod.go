@@ -45,9 +45,9 @@ func (pc *podController) Deploy(cluster cluster.Cluster) {
 	}
 	filters = append(filters, containerLabel.NameAffinity())
 
-	constraints := CstController.GetConstraints()
+	constraints := cstController.GetAllConstraints()
 	for _, cstSpec := range constraints {
-		filter := CstController.LoadFilterFromConstrain(cstSpec)
+		filter := cstController.LoadFilterFromConstrain(cstSpec)
 		filters = append(filters, filter)
 	}
 
