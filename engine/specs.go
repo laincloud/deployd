@@ -18,8 +18,9 @@ const (
 	kLainPodKey         = "pods"
 	kLainNodesKey       = "nodes"
 
-	kLainVolumeRoot  = "/data/lain/volumes"
-	kLainLabelPrefix = "cc.bdp.lain.deployd"
+	kLainVolumeRoot      = "/data/lain/volumes"
+	kLainCloudVolumeRoot = "/data/lain/cloud-volumes"
+	kLainLabelPrefix     = "cc.bdp.lain.deployd"
 
 	MinPodSetupTime = 0
 	MaxPodSetupTime = 300
@@ -80,6 +81,35 @@ func (label *ContainerLabel) FromMaps(m map[string]string) bool {
 	return !hasError
 }
 
+const (
+	CloudVolumeSingleMode = "single"
+	CloudVolumeMultiMode  = "multi"
+)
+
+type CloudVolumeSpec struct {
+	Type string
+	Dirs []string
+}
+
+func (s CloudVolumeSpec) VerifyParams() bool {
+	verify := s.Type == CloudVolumeMultiMode ||
+		s.Type == CloudVolumeSingleMode
+
+	return verify
+}
+
+func (s CloudVolumeSpec) Clone() CloudVolumeSpec {
+	newSpec := s
+	newSpec.Type = s.Type
+	newSpec.Dirs = generics.Clone_StringSlice(s.Dirs)
+	return newSpec
+}
+
+func (s CloudVolumeSpec) Equals(o CloudVolumeSpec) bool {
+	return s.Type == o.Type &&
+		generics.Equal_StringSlice(s.Dirs, o.Dirs)
+}
+
 type ContainerSpec struct {
 	ImSpec
 	Image         string
@@ -89,6 +119,7 @@ type ContainerSpec struct {
 	DnsSearch     []string
 	Volumes       []string // a stateful flag
 	SystemVolumes []string // not a stateful flag, every node has system volumes
+	CloudVolumes  []CloudVolumeSpec
 	Command       []string
 	Entrypoint    []string
 	CpuLimit      int
@@ -107,6 +138,9 @@ func (s ContainerSpec) Clone() ContainerSpec {
 	newSpec.Entrypoint = generics.Clone_StringSlice(s.Entrypoint)
 	newSpec.LogConfig.Type = s.LogConfig.Type
 	newSpec.LogConfig.Config = generics.Clone_StringStringMap(s.LogConfig.Config)
+	for i := range s.CloudVolumes {
+		newSpec.CloudVolumes[i] = s.CloudVolumes[i].Clone()
+	}
 	return newSpec
 }
 
@@ -115,8 +149,15 @@ func (s ContainerSpec) VerifyParams() bool {
 		s.CpuLimit >= 0 &&
 		s.MemoryLimit >= 0 &&
 		s.Expose >= 0
-
-	return verify
+	if !verify {
+		return false
+	}
+	for _, cvSpec := range s.CloudVolumes {
+		if !cvSpec.VerifyParams() {
+			return false
+		}
+	}
+	return true
 }
 
 func (s ContainerSpec) Equals(o ContainerSpec) bool {

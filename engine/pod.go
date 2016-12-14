@@ -394,6 +394,23 @@ func (pc *podController) createHostConfig(index int) adoc.HostConfig {
 		hc.Binds = binds
 	}
 	hc.Binds = append(hc.Binds, spec.SystemVolumes...)
+
+	if len(spec.CloudVolumes) > 0 {
+		var binds []string
+		for _, cv := range spec.CloudVolumes {
+			if cv.Type == CloudVolumeMultiMode {
+				for _, dir := range cv.Dirs {
+					binds = append(binds, fmt.Sprintf("%s/%s/%s/%d/%s:%s", kLainCloudVolumeRoot, podSpec.Namespace, podSpec.Name, pc.pod.InstanceNo, dir, dir))
+				}
+			} else {
+				for _, dir := range cv.Dirs {
+					binds = append(binds, fmt.Sprintf("%s/%s/%s/%s:%s", kLainCloudVolumeRoot, podSpec.Namespace, podSpec.Name, dir, dir))
+				}
+			}
+		}
+		hc.Binds = append(hc.Binds, binds...)
+	}
+
 	hc.NetworkMode = podSpec.Network
 	if hc.NetworkMode == "" {
 		hc.NetworkMode = podSpec.Namespace
