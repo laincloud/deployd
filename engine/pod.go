@@ -13,6 +13,10 @@ import (
 	"github.com/mijia/sweb/log"
 )
 
+// some instances written with JAVA like language may suffer from OOM,
+// if they are restarted before (now - RestartInfoClearInterval), clear the restart info
+var RestartInfoClearInterval time.Duration
+
 // podController is controlled by the podGroupController
 type podController struct {
 	spec PodSpec
@@ -191,8 +195,18 @@ func (pc *podController) Start(cluster cluster.Cluster) {
 			pc.refreshContainer(cluster, i)
 		}
 	}
-	pc.pod.RestartCount += 1
+	pc.UpdateRestartInfo()
 	pc.pod.UpdatedAt = time.Now()
+}
+
+func (pc *podController) UpdateRestartInfo() {
+	now := time.Now()
+	if pc.pod.RestartCount == 0 || pc.pod.RestartAt.Add(RestartInfoClearInterval).Before(now) {
+		pc.pod.RestartCount = 1
+	} else {
+		pc.pod.RestartCount += 1
+	}
+	pc.pod.RestartAt = now
 }
 
 func (pc *podController) Refresh(cluster cluster.Cluster) {

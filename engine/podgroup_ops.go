@@ -313,7 +313,7 @@ func (op pgOperSnapshotGroup) Do(pgCtrl *podGroupController, c cluster.Cluster, 
 	spec, group := pgCtrl.spec, pgCtrl.group
 	start := time.Now()
 	defer func() {
-		log.Infof("%s snapshot group, op=%+v, runtime=%+v, duration=%s", pgCtrl, op, group.ImRuntime, time.Now().Sub(start))
+		log.Infof("%s snapshot group, op=%+v, runtime=%+v, duration=%s", pgCtrl, op, group.BaseRuntime, time.Now().Sub(start))
 	}()
 
 	group.State = RunStateSuccess

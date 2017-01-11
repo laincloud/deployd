@@ -45,11 +45,16 @@ func (rs RunState) String() string {
 }
 
 type ImRuntime struct {
-	State        RunState
-	LastError    string
+	BaseRuntime
 	DriftCount   int
 	RestartCount int
-	UpdatedAt    time.Time
+	RestartAt    time.Time
+}
+
+type BaseRuntime struct {
+	State     RunState
+	LastError string
+	UpdatedAt time.Time
 }
 
 type Container struct {
@@ -149,7 +154,7 @@ func (pod Pod) NodeIp() string {
 
 type PodGroup struct {
 	Pods []Pod
-	ImRuntime
+	BaseRuntime
 }
 
 func (pg PodGroup) Clone() PodGroup {
@@ -171,8 +176,7 @@ func (pg PodGroup) Equals(o PodGroup) bool {
 		}
 	}
 	return pg.State == o.State &&
-		pg.LastError == o.LastError &&
-		pg.DriftCount == o.DriftCount
+		pg.LastError == o.LastError
 }
 
 func (group PodGroup) collectNodes() map[string]string {
