@@ -24,7 +24,7 @@ const (
 func main() {
 	var webAddr, swarmAddr, etcdAddr, advertise string
 	var isDebug, version bool
-	var refreshInterval, dependsGCTime, maxRestartTimes int
+	var refreshInterval, dependsGCTime, maxRestartTimes, restartInfoClearInterval int
 
 	flag.StringVar(&advertise, "advertise", "", "The address advertise to other peers, this will open HA mode")
 	flag.StringVar(&webAddr, "web", ":9000", "The address which lain-deployd is listenning on")
@@ -33,6 +33,7 @@ func main() {
 	flag.IntVar(&dependsGCTime, "dependsGCTime", 5, "The depends garbage collection time (minutes)")
 	flag.IntVar(&refreshInterval, "refreshInterval", 90, "The refresh interval time (seconds)")
 	flag.IntVar(&maxRestartTimes, "maxRestartTimes", 3, "The max restart times for pod")
+	flag.IntVar(&restartInfoClearInterval, "restartInfoClearInterval", 30, "The interval to clear restart info (minutes)")
 	flag.BoolVar(&isDebug, "debug", false, "Debug mode switch")
 	flag.BoolVar(&version, "v", false, "Show version")
 	flag.Parse()
@@ -52,6 +53,7 @@ func main() {
 	engine.DependsGarbageCollectTimeout = time.Duration(dependsGCTime) * time.Minute
 	engine.RefreshInterval = refreshInterval
 	engine.RestartMaxCount = maxRestartTimes
+	engine.RestartInfoClearInterval = time.Duration(restartInfoClearInterval) * time.Minute
 
 	server := apiserver.New(swarmAddr, etcdAddr, isDebug)
 
