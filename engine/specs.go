@@ -12,6 +12,7 @@ import (
 const (
 	kLainDeploydRootKey = "/lain/deployd"
 	kLainConstraintKey  = "constraints"
+	kLainNotifyKey      = "notifies"
 	kLainPodGroupKey    = "pod_groups"
 	kLainDependencyKey  = "depends"
 	kLainSpecKey        = "specs"

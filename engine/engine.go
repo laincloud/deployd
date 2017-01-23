@@ -17,6 +17,8 @@ var RefreshInterval int
 
 var cstController *constraintController
 
+var ntfController *notifyController
+
 var (
 	ErrPodGroupExists         = errors.New("PodGroup has already existed")
 	ErrPodGroupNotExists      = errors.New("PodGroup not existed")
@@ -25,6 +27,7 @@ var (
 	ErrDependencyPodExists    = errors.New("DependencyPod has already existed")
 	ErrDependencyPodNotExists = errors.New("DependencyPod not existed")
 	ErrConstraintNotExists    = errors.New("Constraint not existed")
+	ErrNotifyNotExists        = errors.New("Notify uri not existed")
 )
 
 type OrcEngine struct {
@@ -448,6 +451,23 @@ func (engine *OrcEngine) DeleteConstraints(cstType string) error {
 	}
 }
 
+func (engine *OrcEngine) GetNotifies() []string {
+	notifies := ntfController.GetAllNotifies()
+	return ntfController.CallbackList(notifies)
+}
+
+func (engine *OrcEngine) AddNotify(callback string) error {
+	return ntfController.AddNotify(callback, engine.store)
+}
+
+func (engine *OrcEngine) DeleteNotify(callback string) error {
+	if _, ok := ntfController.GetAllNotifies()[callback]; !ok {
+		return ErrNotifyNotExists
+	} else {
+		return ntfController.RemoveNotify(callback, engine.store)
+	}
+}
+
 func (engine *OrcEngine) onClusterNodeLost(nodeName string) {
 	log.Warnf("Cluster node is down, [%q], will notify pod group controller to drift", nodeName)
 	engine.DriftNode(nodeName, "", "", -1, false)
@@ -501,6 +521,11 @@ func New(cluster cluster.Cluster, store storage.Store) (*OrcEngine, error) {
 
 	cstController = NewConstraintController()
 	if err := cstController.LoadConstraints(engine.store); err != nil {
+		return nil, err
+	}
+
+	ntfController = NewNotifyController(engine.stop)
+	if err := ntfController.LoadNotifies(engine.store); err != nil {
 		return nil, err
 	}
 
