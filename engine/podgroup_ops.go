@@ -170,6 +170,7 @@ func (op pgOperRefreshInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 			}
 		} else {
 			log.Warnf("PodGroupCtrl %s, we found pod missing, just redeploy it", op.spec)
+			ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name, op.instanceNo, NotifyPodMissing))
 			newPodSpec := podCtrl.spec.Clone()
 			prevNodeName := newPodSpec.PrevState.NodeName
 			if newPodSpec.IsHardStateful() {
@@ -197,8 +198,13 @@ func (op pgOperRefreshInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 		runtime = podCtrl.pod.ImRuntime
 		return false
 	}
-	if podCtrl.pod.NeedRestart(op.spec.RestartPolicy) && !podCtrl.pod.RestartEnoughTimes() {
+	if podCtrl.pod.NeedRestart(op.spec.RestartPolicy) {
+		if podCtrl.pod.RestartEnoughTimes() {
+			ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name, op.instanceNo, NotifyLetPodGo))
+			return false
+		}
 		log.Warnf("PodGroupCtrl %s, we found pod down, just restart it", op.spec)
+		ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name, op.instanceNo, NotifyPodDown))
 		podCtrl.Start(c)
 		runtime = podCtrl.pod.ImRuntime
 		if runtime.State == RunStateSuccess {
@@ -227,6 +233,10 @@ func (op pgOperVerifyInstanceCount) Do(pgCtrl *podGroupController, c cluster.Clu
 	for _, podContainer := range pgCtrl.evSnapshot {
 		if podContainer.InstanceNo > op.spec.NumInstances {
 			cId := podContainer.Container.Id
+			log.Warnf("PodGroupCtrl %s we found container %s with iNo=%d, beyond the necessary instance counts %d, will remove it",
+				op.spec, cId, podContainer.InstanceNo, op.spec.NumInstances)
+			log.Warnf("PodGroupCtrl %s we found container %s with iNo=%d, beyond the necessary instance counts %d, will remove it",
+				op.spec, cId, podContainer.InstanceNo, op.spec.NumInstances)
 			log.Warnf("PodGroupCtrl %s we found container %s with iNo=%d, beyond the necessary instance counts %d, will remove it",
 				op.spec, cId, podContainer.InstanceNo, op.spec.NumInstances)
 			c.StopContainer(cId, op.spec.Pod.GetKillTimeout())
