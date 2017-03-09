@@ -152,6 +152,13 @@ func (pod Pod) NodeIp() string {
 	return ""
 }
 
+func (pod Pod) PodIp() string {
+	if len(pod.Containers) > 0 {
+		return pod.Containers[0].NodeIp
+	}
+	return ""
+}
+
 type PodGroup struct {
 	Pods []Pod
 	BaseRuntime

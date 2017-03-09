@@ -44,6 +44,11 @@ type OrcEngine struct {
 	stop         chan struct{}
 }
 
+const (
+	maxDownNode         = 3
+	downNodeResetPeriod = 3 * time.Minute
+)
+
 func (engine *OrcEngine) ListenerId() string {
 	return "deployd.orc_engine"
 }
@@ -468,13 +473,18 @@ func (engine *OrcEngine) DeleteNotify(callback string) error {
 	}
 }
 
-func (engine *OrcEngine) onClusterNodeLost(nodeName string) {
-	log.Warnf("Cluster node is down, [%q], will notify pod group controller to drift", nodeName)
-	engine.DriftNode(nodeName, "", "", -1, false)
+func (engine *OrcEngine) onClusterNodeLost(nodeName string, downCount int) {
+	log.Warnf("Cluster node is down, [%q], %s nodes down in all, will check if need stop the engine", nodeName, downCount)
+	if downCount >= maxDownNode {
+		log.Warnf("Too many cluster nodes stoped in a short period, need stop the engine")
+		engine.Stop()
+	}
 }
 
 func (engine *OrcEngine) startClusterMonitor() {
 	restart := make(chan bool)
+	downTime := time.Now()
+	downCount := 0
 	eventMonitorId := engine.cluster.MonitorEvents("", func(event adoc.Event, err error) {
 		if err != nil {
 			log.Warnf("Error during the cluster event monitor, will try to restart the monitor, %s", err)
@@ -483,8 +493,15 @@ func (engine *OrcEngine) startClusterMonitor() {
 			log.Debugf("Cluster event: %+v", event)
 			if strings.HasPrefix(event.From, "swarm") {
 				switch event.Status {
-				case "node_disconnect":
-					engine.onClusterNodeLost(event.Node.Name)
+				case "engine_disconnect":
+					now := time.Now()
+					if downTime.Add(downNodeResetPeriod).Before(now) {
+						downCount = 1
+						downTime = time.Now()
+					} else {
+						downCount += 1
+					}
+					engine.onClusterNodeLost(event.Node.Name, downCount)
 				}
 			}
 		}
