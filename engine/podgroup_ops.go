@@ -28,10 +28,15 @@ func (op pgOperSaveStore) Do(pgCtrl *podGroupController, c cluster.Cluster, stor
 		pgCtrl.RUnlock()
 	}()
 	pg := pgCtrl.Inspect()
-	if err := store.Set(pgCtrl.storedKey, pg, op.force); err != nil {
-		log.Warnf("[Store] Failed to save pod group %s, %s", pgCtrl.storedKey, err)
-		_err = err
+	if pgCtrl.IsHealthy() {
+		if err := store.Set(pgCtrl.storedKey, pg, op.force); err != nil {
+			log.Warnf("[Store] Failed to save pod group %s, %s", pgCtrl.storedKey, err)
+			_err = err
+		}
+	} else {
+		log.Warnf("Some pods lost IP, will not save pod group %s", pgCtrl.storedKey)
 	}
+
 	return false
 }
 
