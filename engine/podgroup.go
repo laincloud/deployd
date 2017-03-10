@@ -46,10 +46,9 @@ func (pgCtrl *podGroupController) Inspect() PodGroupWithSpec {
 func (pgCtrl *podGroupController) IsHealthy() bool {
 	pgCtrl.RLock()
 	defer pgCtrl.RUnlock()
-	for i := 0; i < pgCtrl.spec.NumInstances; i += 1 {
-		pc := pgCtrl.podCtrls[i]
+	for _, pc := range pgCtrl.podCtrls {
 		if pc.pod.PodIp() == "" {
-			ntfController.Send(NewNotifySpec(pc.spec.Namespace, pc.spec.Name, i, NotifyPodIPLost))
+			ntfController.Send(NewNotifySpec(pc.spec.Namespace, pc.spec.Name, pc.pod.InstanceNo, NotifyPodIPLost))
 			return false
 		}
 	}
