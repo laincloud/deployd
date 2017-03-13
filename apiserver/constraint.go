@@ -32,7 +32,7 @@ func (rc RestfulConstraints) Patch(ctx context.Context, r *http.Request) (int, i
 	soft := form.ParamBoolean(r, "soft", true)
 
 	if cstType == "" {
-		return http.StatusBadRequest, "constaint type required"
+		return http.StatusBadRequest, "constraint type required"
 	}
 	if cstValue == "" {
 		return http.StatusBadRequest, "constraint value required"
@@ -46,7 +46,7 @@ func (rc RestfulConstraints) Patch(ctx context.Context, r *http.Request) (int, i
 
 	urlReverser := getUrlReverser(ctx)
 	return http.StatusAccepted, map[string]string{
-		"message":   "Constaints will be patched",
+		"message":   "Constraints will be patched",
 		"check_url": urlReverser.Reverse("Get_RestfulConstraints") + "?type=" + cstType,
 	}
 }
