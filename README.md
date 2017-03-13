@@ -57,6 +57,20 @@ dependsController是通过Event的方式接收系统中正在发生的Dependency
    * 发现实际运行版本不同于Spec中定义版本，也会调用相应的UpgradePod动作进行升级
    * 发现Container挂了，会尝试重新启动
 
+### constraintController
+
+constraintController用于在部署pod时添加相应限制规则。目前主要用途是在进行集群维护时将某些节点设置为不可部署状态，这样deployd在部署时则不会允许pod部署到相应限制节点。
+constraint机制主要来自于swarm，属于node filter中的一种，具体可参见swarm filter相关文档。
+
+### notifyController
+
+notifyController用于管理deployd的callback列表及给相应callback列表发送通知。当deployd发现容器状态出现问题时，会给已注册的callback url发送通知。
+目前当出现如下情况时notifyController会发送通知：
+    * 某个pod处于exit状态
+    * 找不到某个pod
+    * 某个pod启动后不包含IP
+    * 某个pod在一定时间内被重启了多次
+
 ## 编译和安装
 
 ### 编译
@@ -203,6 +217,61 @@ PATCH /api/nodes?cmd=drift&from={string}&to={string}&pg={string}&pg_instance={in
 #     Accepted: 任务被接受
 # 错误信息：
 #     BadRequest: 缺少必需的参数
+```
+
+### Constraint Api
+
+```
+GET /api/contraints
+# 获取集群当前constraints数据
+
+PATCH /api/constraints?type={string}&value={string}&equal={true|false}&soft={true|false}
+# 漂移相关的contraint
+# 参数：
+#     type: 需要修改的constraint类型，比如node
+#     value: constraint类型对应的值
+#     equal(optional): 在应用constraint的值时，是使用==还是!=，如果为true，则使用==
+#     soft(optional): 是否强制实施此constraint，如果为true，如果不能满足条件则不能部署相应容器
+# 返回：
+#     Accepted: constraint被添加
+# 错误信息：
+#     BadRequest: 缺少必需的参数
+
+DELETE /api/constraints?type={string}
+# 删除某种类型的constraint
+# 参数：
+#     type: Constraint 名称
+# 返回：
+#     Accepted: constraint被删除
+# 错误信息：
+#     BadRequest: 缺少必需的参数
+#     NotFound: 没有找到对应类型的constraint
+```
+
+### Notify Api
+
+```
+GET /api/notifies
+# 获取集群当前notify列表
+
+POST /api/notifies?callback={string}
+# 添加一个callback url
+# 参数：
+#     callback: 需要添加的callback url
+# 返回：
+#     Accepted: callback url被添加
+# 错误信息：
+#     BadRequest: 缺少必需的参数或url格式存在问题
+
+DELETE /api/notifies?callback={string}
+# 删除某个callback url
+# 参数：
+#     callback: callback url
+# 返回：
+#     Accepted: callback url被删除
+# 错误信息：
+#     BadRequest: 缺少相关参数
+#     NotFound: 没有找到对应的callback url
 ```
 
 ### Status API
