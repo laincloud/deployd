@@ -340,6 +340,8 @@ func (s PodSpec) Merge(o PodSpec) PodSpec {
 	s.Version += 1
 	s.UpdatedAt = time.Now()
 	s.PrevState = o.PrevState
+	s.SetupTime = o.SetupTime
+	s.KillTimeout = o.KillTimeout
 	return s
 }
 
