@@ -47,6 +47,7 @@ func (pc *podController) Deploy(cluster cluster.Cluster) {
 	containerLabel := ContainerLabel{
 		Name: pc.spec.Name,
 	}
+
 	filters = append(filters, containerLabel.NameAffinity())
 
 	constraints := cstController.GetAllConstraints()
@@ -64,6 +65,7 @@ func (pc *podController) Deploy(cluster cluster.Cluster) {
 			pc.pod.LastError = fmt.Sprintf("Cannot create container, %s", err)
 			return
 		}
+
 		if err := cluster.StartContainer(id); err != nil {
 			log.Warnf("%s Cannot start container %s, %s", pc, id, err)
 			pc.pod.State = RunStateFail
@@ -80,6 +82,7 @@ func (pc *podController) Deploy(cluster cluster.Cluster) {
 		}
 		pc.spec.PrevState.IPs[i] = pc.pod.Containers[i].ContainerIp
 	}
+
 	if pc.pod.State == RunStatePending {
 		pc.pod.State = RunStateSuccess
 	}
@@ -363,6 +366,11 @@ func (pc *podController) createContainerConfig(filters []string, index int) adoc
 		Annotation:     podSpec.Annotation,
 	}
 
+	labelsMap := containerLabel.Label2Maps()
+	for key, value := range podSpec.Labels {
+		labelsMap[key] = value
+	}
+
 	cc := adoc.ContainerConfig{
 		Image:      spec.Image,
 		Cmd:        spec.Command,
@@ -374,7 +382,7 @@ func (pc *podController) createContainerConfig(filters []string, index int) adoc
 		WorkingDir: spec.WorkingDir,
 		Volumes:    volumes,
 		Entrypoint: spec.Entrypoint,
-		Labels:     containerLabel.Label2Maps(),
+		Labels:     labelsMap,
 	}
 	if spec.Expose > 0 {
 		cc.ExposedPorts = map[string]struct{}{

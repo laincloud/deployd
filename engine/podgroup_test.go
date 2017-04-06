@@ -1,15 +1,16 @@
 package engine
 
 import (
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
 
-	"github.com/mijia/sweb/log"
 	"github.com/laincloud/deployd/cluster"
 	"github.com/laincloud/deployd/cluster/swarm"
 	"github.com/laincloud/deployd/storage"
 	"github.com/laincloud/deployd/storage/etcd"
+	"github.com/mijia/sweb/log"
 )
 
 func TestPodGroupRefresh(t *testing.T) {
@@ -95,11 +96,16 @@ func TestEnginePodGroup(t *testing.T) {
 	}
 
 	engine.RescheduleInstance(name, 1)
-	time.Sleep(8 * time.Second)
+	time.Sleep(30 * time.Second)
 	if pg, ok := engine.InspectPodGroup(name); !ok {
 		t.Errorf("We should have the pod group, but we don't get it")
 	} else if len(pg.Pods) != 1 {
-		t.Errorf("We should have 1 instance of the pods")
+		bytes, err := json.Marshal(pg.Pods)
+		pods := ""
+		if err == nil {
+			pods = string(bytes)
+		}
+		t.Errorf("We should have 1 instance of the pods : %v", pods)
 	}
 
 	podSpec := createPodSpec(namespace, name)
@@ -118,7 +124,7 @@ func TestEnginePodGroup(t *testing.T) {
 		t.Errorf("We should not be able to deploy pod group again in short time we remove it")
 	}
 
-	time.Sleep(10 * time.Second)
+	time.Sleep(20 * time.Second)
 }
 
 func initClusterAndStore() (cluster.Cluster, storage.Store, error) {
@@ -132,7 +138,7 @@ func initClusterAndStore() (cluster.Cluster, storage.Store, error) {
 		return nil, nil, err
 	}
 
-	c, err := swarm.NewCluster(swarmAddr, 30*time.Second, 10*time.Minute, nm, isDebug)
+	c, err := swarm.NewCluster(swarmAddr, 30*time.Second, 10*time.Minute, isDebug)
 	if err != nil {
 		return nil, nil, err
 	}

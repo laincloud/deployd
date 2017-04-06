@@ -139,6 +139,7 @@ func (s ContainerSpec) Clone() ContainerSpec {
 	newSpec.Entrypoint = generics.Clone_StringSlice(s.Entrypoint)
 	newSpec.LogConfig.Type = s.LogConfig.Type
 	newSpec.LogConfig.Config = generics.Clone_StringStringMap(s.LogConfig.Config)
+
 	for i := range s.CloudVolumes {
 		newSpec.CloudVolumes[i] = s.CloudVolumes[i].Clone()
 	}
@@ -229,6 +230,7 @@ type PodSpec struct {
 	Network      string
 	Containers   []ContainerSpec
 	Filters      []string // for cluster scheduling
+	Labels       map[string]string
 	Dependencies []Dependency
 	Annotation   string
 	Stateful     bool
@@ -263,6 +265,7 @@ func (s PodSpec) String() string {
 func (s PodSpec) Clone() PodSpec {
 	newSpec := s
 	newSpec.Filters = generics.Clone_StringSlice(s.Filters)
+	newSpec.Labels = generics.Clone_StringStringMap(s.Labels)
 	newSpec.Containers = make([]ContainerSpec, len(s.Containers))
 	newSpec.PrevState = s.PrevState.Clone()
 	for i := range s.Containers {
@@ -328,13 +331,17 @@ func (s PodSpec) Equals(o PodSpec) bool {
 		s.Version == o.Version &&
 		s.Annotation == o.Annotation &&
 		s.Stateful == o.Stateful &&
-		generics.Equal_StringSlice(s.Filters, o.Filters)
+		generics.Equal_StringSlice(s.Filters, o.Filters) &&
+		generics.Equal_StringStringMap(s.Labels, o.Labels) &&
+		s.KillTimeout == o.KillTimeout &&
+		s.SetupTime == o.SetupTime
 }
 
 func (s PodSpec) Merge(o PodSpec) PodSpec {
 	s.Containers = o.Containers
 	s.Dependencies = o.Dependencies
 	s.Filters = o.Filters
+	s.Labels = o.Labels
 	s.Annotation = o.Annotation
 	s.Stateful = o.Stateful
 	s.Version += 1

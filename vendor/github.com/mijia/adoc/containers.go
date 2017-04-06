@@ -261,6 +261,7 @@ func (client *DockerClient) CreateContainer(containerConf ContainerConfig, hostC
 			v.Set("name", name[0])
 			uri += "?" + v.Encode()
 		}
+		logger.Infof("body:%v", string(body))
 		if data, err := client.sendRequest("POST", uri, body, nil, true); err != nil {
 			return "", err
 		} else {
