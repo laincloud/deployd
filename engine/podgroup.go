@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -40,7 +41,10 @@ func (pgCtrl *podGroupController) String() string {
 func (pgCtrl *podGroupController) Inspect() PodGroupWithSpec {
 	pgCtrl.RLock()
 	defer pgCtrl.RUnlock()
-	return PodGroupWithSpec{pgCtrl.spec, pgCtrl.prevState, pgCtrl.group}
+	p := PodGroupWithSpec{pgCtrl.spec, pgCtrl.prevState, pgCtrl.group}
+	log.Infof("ppp:%v\n", p)
+	log.Warnf("p.LastError:%v\n", p.LastError)
+	return p
 }
 
 func (pgCtrl *podGroupController) IsHealthy() bool {
@@ -71,6 +75,11 @@ func (pgCtrl *podGroupController) Deploy() {
 	pgCtrl.RLock()
 	spec := pgCtrl.spec.Clone()
 	pgCtrl.RUnlock()
+
+	pgCtrl.group.LastError = ""
+	if ok := pgCtrl.checkPodPorts(); !ok {
+		return
+	}
 
 	pgCtrl.opsChan <- pgOperLogOperation{"Start to deploy"}
 	pgCtrl.opsChan <- pgOperSaveStore{true}
@@ -136,10 +145,11 @@ func (pgCtrl *podGroupController) RescheduleSpec(podSpec PodSpec) {
 	spec := pgCtrl.spec.Clone()
 	pgCtrl.RUnlock()
 
-	if spec.Pod.Equals(podSpec) {
+	pgCtrl.group.LastError = ""
+	if ok := pgCtrl.updatePodPorts(podSpec); !ok {
+		log.Infof("updatePodPorts failed:%v", pgCtrl.group.LastError)
 		return
 	}
-
 	oldPodSpec := spec.Pod.Clone()
 	spec.Pod = spec.Pod.Merge(podSpec)
 	spec.Version += 1
@@ -150,7 +160,6 @@ func (pgCtrl *podGroupController) RescheduleSpec(podSpec PodSpec) {
 	pgCtrl.opsChan <- pgOperLogOperation{"Start to reschedule spec"}
 	pgCtrl.opsChan <- pgOperSaveStore{true}
 	pgCtrl.opsChan <- pgOperSnapshotEagleView{spec.Name}
-
 	for i := 0; i < spec.NumInstances; i += 1 {
 		pgCtrl.opsChan <- pgOperUpgradeInstance{i + 1, spec.Version, oldPodSpec, spec.Pod}
 		// wait some seconds for new instance's initialization completed, before we update next one
@@ -166,11 +175,9 @@ func (pgCtrl *podGroupController) RescheduleDrift(fromNode, toNode string, insta
 	pgCtrl.RLock()
 	spec := pgCtrl.spec.Clone()
 	pgCtrl.RUnlock()
-
 	if spec.NumInstances == 0 {
 		return
 	}
-
 	pgCtrl.opsChan <- pgOperLogOperation{fmt.Sprintf("Start to reschedule drift from %s", fromNode)}
 	if instanceNo == -1 {
 		for i := 0; i < spec.NumInstances; i += 1 {
@@ -189,7 +196,7 @@ func (pgCtrl *podGroupController) Remove() {
 	pgCtrl.RLock()
 	spec := pgCtrl.spec.Clone()
 	pgCtrl.RUnlock()
-
+	pgCtrl.cancelPodPorts()
 	pgCtrl.opsChan <- pgOperLogOperation{"Start to remove"}
 	pgCtrl.opsChan <- pgOperRemoveStore{}
 	for i := 0; i < spec.NumInstances; i += 1 {
@@ -204,11 +211,9 @@ func (pgCtrl *podGroupController) Refresh(force bool) {
 	if pgCtrl.IsRemoved() || pgCtrl.IsPending() {
 		return
 	}
-
 	pgCtrl.RLock()
 	spec := pgCtrl.spec.Clone()
 	pgCtrl.RUnlock()
-
 	pgCtrl.opsChan <- pgOperLogOperation{"Start to refresh PodGroup"}
 	pgCtrl.opsChan <- pgOperSnapshotEagleView{spec.Name}
 	for i := 0; i < spec.NumInstances; i += 1 {
@@ -260,6 +265,116 @@ func (pgCtrl *podGroupController) emitChangeEvent(changeType string, spec PodSpe
 	for _, evt := range events {
 		pgCtrl.EmitEvent(evt)
 	}
+}
+
+func (pgCtrl *podGroupController) cancelPodPorts() {
+	spec := pgCtrl.spec
+	var sps StreamPorts
+	if err := json.Unmarshal([]byte(spec.Pod.Annotation), &sps); err != nil {
+		log.Errorf("annotation unmarshal error:%v\n", err)
+		return
+	}
+	stProc := make([]*StreamProc, 0, len(sps.Ports))
+	for _, sp := range sps.Ports {
+		stProc = append(stProc, &StreamProc{
+			StreamPort: sp,
+			NameSpace:  pgCtrl.spec.Namespace,
+			ProcName:   pgCtrl.spec.Name,
+		})
+	}
+	CancelPorts(stProc...)
+}
+
+func (pgCtrl *podGroupController) checkPodPorts() bool {
+	spec := pgCtrl.spec
+	var sps StreamPorts
+	if err := json.Unmarshal([]byte(spec.Pod.Annotation), &sps); err != nil {
+		log.Errorf("annotation unmarshal error:%v\n", err)
+		return false
+	}
+	stProc := make([]*StreamProc, 0, len(sps.Ports))
+	for _, sp := range sps.Ports {
+		stProc = append(stProc, &StreamProc{
+			StreamPort: sp,
+			NameSpace:  pgCtrl.spec.Namespace,
+			ProcName:   pgCtrl.spec.Name,
+		})
+	}
+	succ, existsPorts := RegisterPorts(stProc...)
+	if succ {
+		return true
+	} else {
+		pgCtrl.group.State = RunStateFail
+		pgCtrl.group.LastError = fmt.Sprintf("Cannot start podgroup %v, some ports like %v were alerady in used!", pgCtrl.spec.Name, existsPorts)
+		return false
+	}
+	return true
+}
+
+func (pgCtrl *podGroupController) updatePodPorts(podSpec PodSpec) bool {
+	spec := pgCtrl.spec
+	if spec.Pod.Equals(podSpec) {
+		return true
+	}
+	var oldsps, sps StreamPorts
+	if err := json.Unmarshal([]byte(spec.Pod.Annotation), &oldsps); err != nil {
+		log.Errorf("annotation unmarshal error:%v\n", err)
+		return false
+	}
+	if err := json.Unmarshal([]byte(podSpec.Annotation), &sps); err != nil {
+		log.Errorf("annotation unmarshal error:%v\n", err)
+		return false
+	}
+	if !oldsps.Equals(sps) {
+		//register fresh ports && cancel dated ports
+		freshArr := make([]*StreamProc, 0)
+		datedArr := make([]*StreamProc, 0)
+		var exists bool
+		for _, fresh := range sps.Ports {
+			exists = false
+			for _, dated := range oldsps.Ports {
+				if dated.Equals(fresh) {
+					exists = true
+					break
+				}
+			}
+			if !exists {
+				freshArr = append(freshArr, &StreamProc{
+					StreamPort: fresh,
+					NameSpace:  pgCtrl.spec.Namespace,
+					ProcName:   pgCtrl.spec.Name,
+				})
+			}
+		}
+
+		for _, dated := range oldsps.Ports {
+			exists = false
+			for _, fresh := range sps.Ports {
+				if dated.Equals(fresh) {
+					exists = true
+					break
+				}
+			}
+			if !exists {
+				datedArr = append(datedArr, &StreamProc{
+					StreamPort: dated,
+					NameSpace:  pgCtrl.spec.Namespace,
+					ProcName:   pgCtrl.spec.Name,
+				})
+			}
+		}
+		succ, existsPorts := RegisterPorts(freshArr...)
+		if succ {
+			CancelPorts(datedArr...)
+			return true
+		} else {
+			pgCtrl.group.State = RunStateFail
+			pgCtrl.group.LastError = fmt.Sprintf("Cannot start podgroup %v, some ports like %v were alerady in used!", pgCtrl.spec.Name, existsPorts)
+			log.Warn("check ports failed")
+			return false
+		}
+	}
+	return true
 }
 
 func newPodGroupController(spec PodGroupSpec, states []PodPrevState, pg PodGroup) *podGroupController {

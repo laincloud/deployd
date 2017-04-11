@@ -180,6 +180,7 @@ func (engine *OrcEngine) RemovePodGroup(name string) error {
 	if pgCtrl, ok := engine.pgCtrls[name]; !ok {
 		return ErrPodGroupNotExists
 	} else {
+		log.Infof("start delete %v\n", name)
 		engine.opsChan <- orcOperRemove{pgCtrl}
 		delete(engine.pgCtrls, name)
 		engine.rmPgCtrls[name] = pgCtrl

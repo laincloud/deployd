@@ -57,6 +57,8 @@ func main() {
 
 	server := apiserver.New(swarmAddr, etcdAddr, isDebug)
 
+	engine.ConfigPostManager(etcdAddr)
+
 	if advertise == "" {
 		// no advertise, running without election
 		go server.ListenAndServe(webAddr)
