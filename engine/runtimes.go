@@ -7,6 +7,7 @@ import (
 )
 
 type RunState int
+type HealthState int
 
 var RestartMaxCount int
 
@@ -19,6 +20,13 @@ const (
 	RunStateInconsistent
 	RunStateMissing
 	RunStateRemoved
+)
+
+const (
+	HealthStateNone = iota
+	HealthStateStarting
+	HealthStateHealthy
+	HealthStateUnHealthy
 )
 
 func (rs RunState) String() string {
@@ -44,6 +52,21 @@ func (rs RunState) String() string {
 	}
 }
 
+func (hs HealthState) String() string {
+	switch hs {
+	case HealthStateNone:
+		return "None"
+	case HealthStateStarting:
+		return "Starting"
+	case HealthStateHealthy:
+		return "healthy"
+	case HealthStateUnHealthy:
+		return "unhealthy"
+	default:
+		return "None"
+	}
+}
+
 type ImRuntime struct {
 	BaseRuntime
 	DriftCount   int
@@ -52,6 +75,7 @@ type ImRuntime struct {
 }
 
 type BaseRuntime struct {
+	Healthst  HealthState
 	State     RunState
 	LastError string
 	UpdatedAt time.Time

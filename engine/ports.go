@@ -3,6 +3,8 @@ package engine
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 
 	etcd "github.com/coreos/etcd/client"
@@ -76,7 +78,7 @@ func NewPortsManager(endpoint string) *PortsManager {
 	}
 }
 
-func (pm PortsManager) occupiedPorts(spArr ...*StreamProc) []int {
+func (pm PortsManager) occupiedProcs(spArr ...*StreamProc) []int {
 	occs := make([]int, 0)
 	for _, sp := range spArr {
 		key := fmt.Sprintf(KeyPrefixStreamPorts+"/%d", sp.SrcPort)
@@ -85,6 +87,61 @@ func (pm PortsManager) occupiedPorts(spArr ...*StreamProc) []int {
 		}
 	}
 	return occs
+}
+
+func (pm PortsManager) occupiedPorts(ports ...int) []int {
+	occs := make([]int, 0)
+	for _, port := range ports {
+		key := fmt.Sprintf(KeyPrefixStreamPorts+"/%d", port)
+		if keyExists(pm.etcd, key) {
+			occs = append(occs, port)
+		}
+	}
+	return occs
+}
+
+func (pm PortsManager) Refresh(pgCtrls map[string]*podGroupController) {
+	pm.lock.Lock()
+	defer pm.lock.Unlock()
+	occs := make([]*StreamProc, 0)
+	for _, pgCtrl := range pgCtrls {
+		annotation := pgCtrl.spec.Pod.Annotation
+		var sps StreamPorts
+		if err := json.Unmarshal([]byte(annotation), &sps); err != nil {
+			continue
+		}
+		for _, sp := range sps.Ports {
+			occs = append(occs, &StreamProc{
+				StreamPort: sp,
+				NameSpace:  pgCtrl.spec.Namespace,
+				ProcName:   pgCtrl.spec.Name,
+			})
+		}
+	}
+
+	for _, sp := range occs {
+		key := fmt.Sprintf(KeyPrefixStreamPorts+"/%d", sp.SrcPort)
+		putValue(pm.etcd, key, sp, true)
+	}
+
+	markedPorts, err := fetchAll(pm.etcd, KeyPrefixStreamPorts)
+	if err != nil {
+		return
+	}
+	portsSets := make(map[int]struct{})
+	for _, port := range occs {
+		portsSets[port.SrcPort] = struct{}{}
+	}
+	garbagePorts := make([]int, 0)
+	for _, port := range markedPorts {
+		if _, ok := portsSets[port]; !ok {
+			garbagePorts = append(garbagePorts, port)
+		}
+	}
+	for _, port := range garbagePorts {
+		key := fmt.Sprintf(KeyPrefixStreamPorts+"/%d", port)
+		delValue(pm.etcd, key)
+	}
 }
 
 func (pm PortsManager) RegisterStreamPorts(spArr ...*StreamProc) (bool, []int) {
@@ -96,7 +153,7 @@ func (pm PortsManager) RegisterStreamPorts(spArr ...*StreamProc) (bool, []int) {
 			for _, succeed := range succeedArr {
 				pm.CancelStreamPort(succeed)
 			}
-			return false, pm.occupiedPorts(spArr...)
+			return false, pm.occupiedProcs(spArr...)
 		}
 		succeedArr = append(succeedArr, sp)
 	}
@@ -111,9 +168,19 @@ func (pm PortsManager) CancelStreamPorts(spArr ...*StreamProc) {
 	}
 }
 
+func (pm PortsManager) FetchAllStreamPortsInfo() []StreamProc {
+	pm.lock.Lock()
+	defer pm.lock.Unlock()
+	ports, err := fetchAllInfo(pm.etcd, KeyPrefixStreamPorts)
+	if err != nil {
+		return nil
+	}
+	return ports
+}
+
 func (pm PortsManager) RegisterStreamPort(sp *StreamProc) bool {
 	key := fmt.Sprintf(KeyPrefixStreamPorts+"/%d", sp.SrcPort)
-	return putValue(pm.etcd, key, sp)
+	return putValue(pm.etcd, key, sp, false)
 }
 
 func (pm *PortsManager) CancelStreamPort(sp *StreamProc) bool {
@@ -127,6 +194,18 @@ func RegisterPorts(sps ...*StreamProc) (bool, []int) {
 
 func CancelPorts(sps ...*StreamProc) {
 	pm.CancelStreamPorts(sps...)
+}
+
+func FetchAllPortsInfo() []StreamProc {
+	return pm.FetchAllStreamPortsInfo()
+}
+
+func OccupiedPorts(ports ...int) []int {
+	return pm.occupiedPorts(ports...)
+}
+
+func RefreshPorts(pgCtrls map[string]*podGroupController) {
+	pm.Refresh(pgCtrls)
 }
 
 func keyExists(e *etcd.Client, key string) bool {
@@ -151,17 +230,56 @@ func keyExists(e *etcd.Client, key string) bool {
 	})
 }
 
-func putValue(e *etcd.Client, key string, value interface{}) bool {
+func fetchAllInfo(e *etcd.Client, key string) ([]StreamProc, error) {
+	kapi := etcd.NewKeysAPI(*e)
+	resp, err := kapi.Get(context.Background(), key, &etcd.GetOptions{Recursive: true, Quorum: true})
+	if err != nil {
+		return nil, err
+	}
+	portsInfo := make([]StreamProc, 0, len(resp.Node.Nodes))
+
+	var sp StreamProc
+	for _, node := range resp.Node.Nodes {
+		json.Unmarshal([]byte(node.Value), &sp)
+		portsInfo = append(portsInfo, sp)
+	}
+	return portsInfo, nil
+}
+
+func fetchAll(e *etcd.Client, key string) ([]int, error) {
+	kapi := etcd.NewKeysAPI(*e)
+	resp, err := kapi.Get(context.Background(), key, &etcd.GetOptions{Recursive: true, Quorum: true})
+	if err != nil {
+		return nil, err
+	}
+	ports := make([]int, 0, len(resp.Node.Nodes))
+	for _, node := range resp.Node.Nodes {
+		key := node.Key
+		infos := strings.Split(key, "/")
+		if len(infos) > 0 {
+			if port, err := strconv.Atoi(strings.Split(key, "/")[len(infos)-1]); err == nil {
+				ports = append(ports, port)
+			}
+		}
+	}
+	return ports, nil
+}
+
+func putValue(e *etcd.Client, key string, value interface{}, force bool) bool {
 	kapi := etcd.NewKeysAPI(*e)
 	bytes, err := json.Marshal(value)
 	if err != nil {
 		return false
 	}
 	return storeOp(func() (bool, error) {
+		var opts *etcd.SetOptions = nil
+		if !force {
+			opts = &etcd.SetOptions{PrevExist: etcd.PrevNoExist}
+		}
 		_, err := kapi.Set(
 			context.Background(),
 			key, string(bytes),
-			&etcd.SetOptions{PrevExist: etcd.PrevNoExist},
+			opts,
 		)
 		if err != nil {
 			if etcdErr, ok := err.(etcd.Error); ok {

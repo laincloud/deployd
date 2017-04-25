@@ -332,6 +332,7 @@ func (op pgOperSnapshotGroup) Do(pgCtrl *podGroupController, c cluster.Cluster, 
 	}()
 
 	group.State = RunStateSuccess
+	group.Healthst = HealthStateHealthy
 	group.LastError = ""
 	group.Pods = make([]Pod, spec.NumInstances)
 	for i, podCtrl := range pgCtrl.podCtrls {
@@ -339,6 +340,9 @@ func (op pgOperSnapshotGroup) Do(pgCtrl *podGroupController, c cluster.Cluster, 
 		if podCtrl.pod.State != RunStateSuccess {
 			group.State = podCtrl.pod.State
 			group.LastError = podCtrl.pod.LastError
+		}
+		if podCtrl.pod.Healthst != HealthStateHealthy {
+			group.Healthst = podCtrl.pod.Healthst
 		}
 	}
 	if op.updateTime {
@@ -461,7 +465,6 @@ type pgOperLogOperation struct {
 func (op pgOperLogOperation) Do(pgCtrl *podGroupController, c cluster.Cluster, store storage.Store, ev *RuntimeEagleView) bool {
 	pgCtrl.RLock()
 	defer pgCtrl.RUnlock()
-	log.Infof("%s %s", pgCtrl, op.msg)
 	return false
 }
 

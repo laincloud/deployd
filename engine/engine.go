@@ -9,6 +9,7 @@ import (
 
 	"github.com/laincloud/deployd/cluster"
 	"github.com/laincloud/deployd/storage"
+	"github.com/laincloud/deployd/utils/util"
 	"github.com/mijia/adoc"
 	"github.com/mijia/sweb/log"
 )
@@ -335,6 +336,7 @@ func (engine *OrcEngine) initPodGroupCtrl(spec PodGroupSpec, states []PodPrevSta
 // This will be running inside the go routine
 func (engine *OrcEngine) initOperationWorker() {
 	tick := time.Tick(time.Duration(RefreshInterval) * time.Second)
+	portsTick := time.Tick(5 * time.Minute)
 	for {
 		select {
 		case op := <-engine.opsChan:
@@ -370,6 +372,8 @@ func (engine *OrcEngine) initOperationWorker() {
 				}
 			}
 			engine.RUnlock()
+		case <-portsTick:
+			RefreshPorts(engine.pgCtrls)
 		case <-engine.stop:
 			if len(engine.opsChan) == 0 {
 				return
@@ -503,6 +507,32 @@ func (engine *OrcEngine) startClusterMonitor() {
 						downCount += 1
 					}
 					engine.onClusterNodeLost(event.Node.Name, downCount)
+				}
+			} else if strings.HasPrefix(event.Status, "health_status") {
+				id := event.Id
+				if cont, err := engine.cluster.InspectContainer(id); err == nil {
+					status := HealthState(HealthStateNone)
+					switch event.Status {
+					case "health_status: starting":
+						status = HealthStateStarting
+					case "health_status: healthy":
+						status = HealthStateHealthy
+					case "health_status: unhealthy":
+						status = HealthStateUnHealthy
+					}
+					containerName := strings.TrimLeft(cont.Name, "/")
+					if podName, instance, err := util.ParseNameInstanceNo(containerName); err == nil {
+						pgCtrl, ok := engine.pgCtrls[podName]
+						if ok {
+							if len(pgCtrl.podCtrls) >= instance {
+								pgCtrl.podCtrls[instance-1].pod.Healthst = status
+								pgCtrl.opsChan <- pgOperSnapshotGroup{true}
+								pgCtrl.opsChan <- pgOperSaveStore{true}
+							}
+						}
+					}
+				} else {
+					log.Errorf("ParseNameInstanceNo error:%v", err)
 				}
 			}
 		}

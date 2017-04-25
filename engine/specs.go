@@ -111,6 +111,28 @@ func (s CloudVolumeSpec) Equals(o CloudVolumeSpec) bool {
 		generics.Equal_StringSlice(s.Dirs, o.Dirs)
 }
 
+type HealthCnfOptions struct {
+	Interval int `json:"interval"`
+	Timeout  int `json:"timeout"`
+	Retries  int `json:"retries"`
+}
+
+func (hco HealthCnfOptions) Equals(cp HealthCnfOptions) bool {
+	return hco.Interval == cp.Interval &&
+		hco.Timeout == cp.Timeout &&
+		hco.Retries == cp.Retries
+}
+
+type HealthConfig struct {
+	Cmd     string           `json:"cmd"`
+	Options HealthCnfOptions `json:"options"`
+}
+
+func (hc HealthConfig) Equals(cp HealthConfig) bool {
+	return hc.Cmd == cp.Cmd &&
+		hc.Options.Equals(cp.Options)
+}
+
 type ContainerSpec struct {
 	ImSpec
 	Image         string
@@ -178,6 +200,7 @@ func (s ContainerSpec) Equals(o ContainerSpec) bool {
 		generics.Equal_StringSlice(s.Entrypoint, o.Entrypoint) &&
 		s.LogConfig.Type == o.LogConfig.Type &&
 		generics.Equal_StringStringMap(s.LogConfig.Config, o.LogConfig.Config)
+
 }
 
 func NewContainerSpec(image string) ContainerSpec {
@@ -237,6 +260,7 @@ type PodSpec struct {
 	SetupTime    int
 	KillTimeout  int
 	PrevState    PodPrevState
+	HealthConfig HealthConfig
 }
 
 func (s PodSpec) GetSetupTime() int {
@@ -275,6 +299,7 @@ func (s PodSpec) Clone() PodSpec {
 	for i := range s.Dependencies {
 		newSpec.Dependencies[i] = s.Dependencies[i].Clone()
 	}
+	newSpec.HealthConfig = s.HealthConfig
 	return newSpec
 }
 
@@ -334,7 +359,8 @@ func (s PodSpec) Equals(o PodSpec) bool {
 		generics.Equal_StringSlice(s.Filters, o.Filters) &&
 		generics.Equal_StringStringMap(s.Labels, o.Labels) &&
 		s.KillTimeout == o.KillTimeout &&
-		s.SetupTime == o.SetupTime
+		s.SetupTime == o.SetupTime &&
+		s.HealthConfig.Equals(o.HealthConfig)
 }
 
 func (s PodSpec) Merge(o PodSpec) PodSpec {
@@ -349,6 +375,7 @@ func (s PodSpec) Merge(o PodSpec) PodSpec {
 	s.PrevState = o.PrevState
 	s.SetupTime = o.SetupTime
 	s.KillTimeout = o.KillTimeout
+	s.HealthConfig = o.HealthConfig
 	return s
 }
 

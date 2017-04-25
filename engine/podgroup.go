@@ -42,8 +42,6 @@ func (pgCtrl *podGroupController) Inspect() PodGroupWithSpec {
 	pgCtrl.RLock()
 	defer pgCtrl.RUnlock()
 	p := PodGroupWithSpec{pgCtrl.spec, pgCtrl.prevState, pgCtrl.group}
-	log.Infof("ppp:%v\n", p)
-	log.Warnf("p.LastError:%v\n", p.LastError)
 	return p
 }
 
@@ -147,7 +145,6 @@ func (pgCtrl *podGroupController) RescheduleSpec(podSpec PodSpec) {
 
 	pgCtrl.group.LastError = ""
 	if ok := pgCtrl.updatePodPorts(podSpec); !ok {
-		log.Infof("updatePodPorts failed:%v", pgCtrl.group.LastError)
 		return
 	}
 	oldPodSpec := spec.Pod.Clone()
@@ -161,9 +158,8 @@ func (pgCtrl *podGroupController) RescheduleSpec(podSpec PodSpec) {
 	pgCtrl.opsChan <- pgOperSaveStore{true}
 	pgCtrl.opsChan <- pgOperSnapshotEagleView{spec.Name}
 	for i := 0; i < spec.NumInstances; i += 1 {
+		pgCtrl.waitLastPodStarted(i, podSpec)
 		pgCtrl.opsChan <- pgOperUpgradeInstance{i + 1, spec.Version, oldPodSpec, spec.Pod}
-		// wait some seconds for new instance's initialization completed, before we update next one
-		time.Sleep(time.Second * time.Duration(podSpec.GetSetupTime()))
 	}
 	pgCtrl.opsChan <- pgOperSnapshotGroup{true}
 	pgCtrl.opsChan <- pgOperSnapshotPrevState{}
@@ -181,6 +177,7 @@ func (pgCtrl *podGroupController) RescheduleDrift(fromNode, toNode string, insta
 	pgCtrl.opsChan <- pgOperLogOperation{fmt.Sprintf("Start to reschedule drift from %s", fromNode)}
 	if instanceNo == -1 {
 		for i := 0; i < spec.NumInstances; i += 1 {
+			pgCtrl.waitLastPodStarted(i, spec.Pod)
 			pgCtrl.opsChan <- pgOperDriftInstance{i + 1, fromNode, toNode, force}
 		}
 	} else {
@@ -370,11 +367,33 @@ func (pgCtrl *podGroupController) updatePodPorts(podSpec PodSpec) bool {
 		} else {
 			pgCtrl.group.State = RunStateFail
 			pgCtrl.group.LastError = fmt.Sprintf("Cannot start podgroup %v, some ports like %v were alerady in used!", pgCtrl.spec.Name, existsPorts)
-			log.Warn("check ports failed")
 			return false
 		}
 	}
 	return true
+}
+
+func (pgCtrl *podGroupController) waitLastPodStarted(i int, podSpec PodSpec) {
+	retries := 5
+	if i > 0 {
+		// wait some seconds for new instance's initialization completed, before we update next one
+		if pgCtrl.podCtrls[i].pod.Healthst == HealthStateNone {
+			time.Sleep(time.Second * time.Duration(podSpec.GetSetupTime()))
+		} else {
+			retryTimes := 0
+			for {
+				if retryTimes == retries {
+					break
+				}
+				retryTimes++
+				// wait until to non-starting state
+				if pgCtrl.podCtrls[i-1].pod.Healthst != HealthStateStarting {
+					break
+				}
+				time.Sleep(time.Second * 10)
+			}
+		}
+	}
 }
 
 func newPodGroupController(spec PodGroupSpec, states []PodPrevState, pg PodGroup) *podGroupController {

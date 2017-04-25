@@ -17,6 +17,12 @@ import (
 // if they are restarted before (now - RestartInfoClearInterval), clear the restart info
 var RestartInfoClearInterval time.Duration
 
+const (
+	DefaultHealthInterval = 10
+	DefaultHealthTimeout  = 5
+	DefaultHealthRetries  = 3
+)
+
 // podController is controlled by the podGroupController
 type podController struct {
 	spec PodSpec
@@ -313,6 +319,18 @@ func (pc *podController) refreshContainer(kluster cluster.Cluster, index int) {
 				pc.pod.LastError = state.Error
 			}
 		}
+		health := state.Health
+		if health != nil {
+			if health.Status == HealthState(HealthStateStarting).String() {
+				pc.pod.Healthst = HealthState(HealthStateStarting)
+			} else if health.Status == HealthState(HealthStateHealthy).String() {
+				pc.pod.Healthst = HealthState(HealthStateHealthy)
+			} else {
+				pc.pod.Healthst = HealthState(HealthStateUnHealthy)
+			}
+		} else {
+			pc.pod.Healthst = HealthState(HealthStateNone)
+		}
 	}
 }
 
@@ -384,6 +402,37 @@ func (pc *podController) createContainerConfig(filters []string, index int) adoc
 		Entrypoint: spec.Entrypoint,
 		Labels:     labelsMap,
 	}
+	if podSpec.HealthConfig.Cmd != "" {
+		if podSpec.HealthConfig.Cmd == "none" {
+			cc.Healthcheck = &adoc.HealthConfig{
+				Test: []string{"NONE"},
+			}
+		} else {
+			interval := DefaultHealthInterval
+			timeout := DefaultHealthTimeout
+			retries := DefaultHealthRetries
+
+			if podSpec.HealthConfig.Options.Interval > 0 {
+				interval = podSpec.HealthConfig.Options.Interval
+			}
+
+			if podSpec.HealthConfig.Options.Timeout > 0 {
+				interval = podSpec.HealthConfig.Options.Timeout
+			}
+
+			if podSpec.HealthConfig.Options.Retries > 0 {
+				interval = podSpec.HealthConfig.Options.Retries
+			}
+
+			cc.Healthcheck = &adoc.HealthConfig{
+				Test:     []string{"CMD-SHELL", "timeout 10s " + pc.spec.HealthConfig.Cmd + " || exit 1"},
+				Interval: time.Duration(interval) * time.Second,
+				Timeout:  time.Duration(timeout) * time.Second,
+				Retries:  retries,
+			}
+		}
+	}
+
 	if spec.Expose > 0 {
 		cc.ExposedPorts = map[string]struct{}{
 			fmt.Sprintf("%d/tcp", spec.Expose): struct{}{},
