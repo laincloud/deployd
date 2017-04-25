@@ -150,6 +150,10 @@ func (op pgOperRefreshInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 	}
 
 	if runtime.State == RunStateSuccess {
+		if runtime.Healthst == HealthStateUnHealthy {
+			log.Warnf("PodGroupCtrl %s, we found pod unhealthy", op.spec)
+			ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name, op.instanceNo, NotifyPodUnHealthy))
+		}
 		if generics.Equal_StringSlice(evIds, podCtrl.pod.ContainerIds()) && op.spec.Version == evVersion {
 			pod := podCtrl.pod.Clone()
 			pgCtrl.emitChangeEvent("verify", podCtrl.spec, pod, pod.NodeName())

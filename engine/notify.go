@@ -16,10 +16,11 @@ import (
 )
 
 var (
-	NotifyPodMissing = "LAIN found pod missing, ready to redeployd it"
-	NotifyPodDown    = "LAIN found pod down, ready to restart it"
-	NotifyLetPodGo   = "LAIN found pod restart too many times in a short period, will let it go"
-	NotifyPodIPLost  = "LAIN found pod lost IP, please inform the SA team"
+	NotifyPodMissing   = "LAIN found pod missing, ready to redeployd it"
+	NotifyPodDown      = "LAIN found pod down, ready to restart it"
+	NotifyLetPodGo     = "LAIN found pod restart too many times in a short period, will let it go"
+	NotifyPodIPLost    = "LAIN found pod lost IP, please inform the SA team"
+	NotifyPodUnHealthy = "LAIN found pod Unhealthy, please check your service"
 )
 
 type notifyController struct {

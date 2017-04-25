@@ -425,7 +425,7 @@ func (pc *podController) createContainerConfig(filters []string, index int) adoc
 			}
 
 			cc.Healthcheck = &adoc.HealthConfig{
-				Test:     []string{"CMD-SHELL", "timeout 10s " + pc.spec.HealthConfig.Cmd + " || exit 1"},
+				Test:     []string{"CMD-SHELL", "timeout " + strconv.Itoa(timeout) + " " + pc.spec.HealthConfig.Cmd + " || exit 1"},
 				Interval: time.Duration(interval) * time.Second,
 				Timeout:  time.Duration(timeout) * time.Second,
 				Retries:  retries,
