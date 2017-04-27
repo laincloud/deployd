@@ -41,8 +41,7 @@ func (pgCtrl *podGroupController) String() string {
 func (pgCtrl *podGroupController) Inspect() PodGroupWithSpec {
 	pgCtrl.RLock()
 	defer pgCtrl.RUnlock()
-	p := PodGroupWithSpec{pgCtrl.spec, pgCtrl.prevState, pgCtrl.group}
-	return p
+	return PodGroupWithSpec{pgCtrl.spec, pgCtrl.prevState, pgCtrl.group}
 }
 
 func (pgCtrl *podGroupController) IsHealthy() bool {
@@ -143,6 +142,9 @@ func (pgCtrl *podGroupController) RescheduleSpec(podSpec PodSpec) {
 	spec := pgCtrl.spec.Clone()
 	pgCtrl.RUnlock()
 
+	if spec.Pod.Equals(podSpec) {
+		return
+	}
 	pgCtrl.group.LastError = ""
 	if ok := pgCtrl.updatePodPorts(podSpec); !ok {
 		return

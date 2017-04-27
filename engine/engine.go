@@ -137,7 +137,8 @@ func (engine *OrcEngine) NewPodGroup(spec PodGroupSpec) error {
 	if _, ok := engine.rmPgCtrls[spec.Name]; ok {
 		return ErrPodGroupCleaning
 	}
-
+	spec.CreatedAt = time.Now()
+	spec.Pod.CreatedAt = spec.CreatedAt
 	for _, depends := range spec.Pod.Dependencies {
 		if _, ok := engine.dependsCtrls[depends.PodName]; !ok {
 			//We will allow the weak reference to the dependency pods and won't return an error

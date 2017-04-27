@@ -213,7 +213,13 @@ func (op pgOperRefreshInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 			return false
 		}
 		log.Warnf("PodGroupCtrl %s, we found pod down, just restart it", op.spec)
-		ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name, op.instanceNo, NotifyPodDown))
+		if podCtrl.pod.OOMkilled {
+			log.Errorf("pod down with oom:%v", op.spec)
+			ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name, op.instanceNo, NotifyPodDownOOM))
+		} else {
+			ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name, op.instanceNo, NotifyPodDown))
+		}
+
 		podCtrl.Start(c)
 		runtime = podCtrl.pod.ImRuntime
 		if runtime.State == RunStateSuccess {
@@ -242,10 +248,6 @@ func (op pgOperVerifyInstanceCount) Do(pgCtrl *podGroupController, c cluster.Clu
 	for _, podContainer := range pgCtrl.evSnapshot {
 		if podContainer.InstanceNo > op.spec.NumInstances {
 			cId := podContainer.Container.Id
-			log.Warnf("PodGroupCtrl %s we found container %s with iNo=%d, beyond the necessary instance counts %d, will remove it",
-				op.spec, cId, podContainer.InstanceNo, op.spec.NumInstances)
-			log.Warnf("PodGroupCtrl %s we found container %s with iNo=%d, beyond the necessary instance counts %d, will remove it",
-				op.spec, cId, podContainer.InstanceNo, op.spec.NumInstances)
 			log.Warnf("PodGroupCtrl %s we found container %s with iNo=%d, beyond the necessary instance counts %d, will remove it",
 				op.spec, cId, podContainer.InstanceNo, op.spec.NumInstances)
 			c.StopContainer(cId, op.spec.Pod.GetKillTimeout())

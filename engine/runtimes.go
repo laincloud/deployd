@@ -55,9 +55,9 @@ func (rs RunState) String() string {
 func (hs HealthState) String() string {
 	switch hs {
 	case HealthStateNone:
-		return "None"
+		return "none"
 	case HealthStateStarting:
-		return "Starting"
+		return "starting"
 	case HealthStateHealthy:
 		return "healthy"
 	case HealthStateUnHealthy:
@@ -77,6 +77,7 @@ type ImRuntime struct {
 type BaseRuntime struct {
 	Healthst  HealthState
 	State     RunState
+	OOMkilled bool
 	LastError string
 	UpdatedAt time.Time
 }
