@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/laincloud/deployd/cluster"
 	"github.com/mijia/adoc"
 	"github.com/mijia/sweb/log"
-	"github.com/laincloud/deployd/cluster"
 )
 
 type RuntimeEaglePod struct {

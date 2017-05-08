@@ -1,9 +1,9 @@
 package engine
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
-
 	"strings"
 	"time"
 
@@ -16,6 +16,14 @@ import (
 // some instances written with JAVA like language may suffer from OOM,
 // if they are restarted before (now - RestartInfoClearInterval), clear the restart info
 var RestartInfoClearInterval time.Duration
+
+const (
+	DefaultHealthInterval = 10
+	DefaultHealthTimeout  = 5
+	DefaultHealthRetries  = 3
+
+	CURL_TMPLT = `echo $(curl -s -o /dev/null -w '%%{http_code}\n' %s) | grep -Eq "^[2-3]..$"`
+)
 
 // podController is controlled by the podGroupController
 type podController struct {
@@ -47,6 +55,7 @@ func (pc *podController) Deploy(cluster cluster.Cluster) {
 	containerLabel := ContainerLabel{
 		Name: pc.spec.Name,
 	}
+
 	filters = append(filters, containerLabel.NameAffinity())
 
 	constraints := cstController.GetAllConstraints()
@@ -64,6 +73,7 @@ func (pc *podController) Deploy(cluster cluster.Cluster) {
 			pc.pod.LastError = fmt.Sprintf("Cannot create container, %s", err)
 			return
 		}
+
 		if err := cluster.StartContainer(id); err != nil {
 			log.Warnf("%s Cannot start container %s, %s", pc, id, err)
 			pc.pod.State = RunStateFail
@@ -80,6 +90,7 @@ func (pc *podController) Deploy(cluster cluster.Cluster) {
 		}
 		pc.spec.PrevState.IPs[i] = pc.pod.Containers[i].ContainerIp
 	}
+
 	if pc.pod.State == RunStatePending {
 		pc.pod.State = RunStateSuccess
 	}
@@ -302,6 +313,7 @@ func (pc *podController) refreshContainer(kluster cluster.Cluster, index int) {
 		pc.spec.PrevState.IPs[index] = container.ContainerIp
 		pc.pod.Containers[index] = container
 		state := info.State
+		pc.pod.OOMkilled = state.OOMKilled
 		if !state.Running {
 			if state.ExitCode == 0 {
 				pc.pod.State = RunStateExit
@@ -309,6 +321,18 @@ func (pc *podController) refreshContainer(kluster cluster.Cluster, index int) {
 				pc.pod.State = RunStateFail
 				pc.pod.LastError = state.Error
 			}
+		}
+		health := state.Health
+		if health != nil {
+			if health.Status == HealthState(HealthStateStarting).String() {
+				pc.pod.Healthst = HealthState(HealthStateStarting)
+			} else if health.Status == HealthState(HealthStateHealthy).String() {
+				pc.pod.Healthst = HealthState(HealthStateHealthy)
+			} else {
+				pc.pod.Healthst = HealthState(HealthStateUnHealthy)
+			}
+		} else {
+			pc.pod.Healthst = HealthState(HealthStateNone)
 		}
 	}
 }
@@ -363,6 +387,11 @@ func (pc *podController) createContainerConfig(filters []string, index int) adoc
 		Annotation:     podSpec.Annotation,
 	}
 
+	labelsMap := containerLabel.Label2Maps()
+	for key, value := range podSpec.Labels {
+		labelsMap[key] = value
+	}
+
 	cc := adoc.ContainerConfig{
 		Image:      spec.Image,
 		Cmd:        spec.Command,
@@ -374,8 +403,61 @@ func (pc *podController) createContainerConfig(filters []string, index int) adoc
 		WorkingDir: spec.WorkingDir,
 		Volumes:    volumes,
 		Entrypoint: spec.Entrypoint,
-		Labels:     containerLabel.Label2Maps(),
+		Labels:     labelsMap,
 	}
+	if podSpec.HealthConfig.Cmd != "" {
+		if podSpec.HealthConfig.Cmd == "none" {
+			cc.Healthcheck = &adoc.HealthConfig{
+				Test: []string{"NONE"},
+			}
+		} else {
+			interval := DefaultHealthInterval
+			timeout := DefaultHealthTimeout
+			retries := DefaultHealthRetries
+
+			if podSpec.HealthConfig.Options.Interval > 0 {
+				interval = podSpec.HealthConfig.Options.Interval
+			}
+
+			if podSpec.HealthConfig.Options.Timeout > 0 {
+				interval = podSpec.HealthConfig.Options.Timeout
+			}
+
+			if podSpec.HealthConfig.Options.Retries > 0 {
+				interval = podSpec.HealthConfig.Options.Retries
+			}
+
+			cc.Healthcheck = &adoc.HealthConfig{
+				Test:     []string{"CMD-SHELL", "timeout " + strconv.Itoa(timeout) + " " + pc.spec.HealthConfig.Cmd + " || exit 1"},
+				Interval: time.Duration(interval) * time.Second,
+				Timeout:  time.Duration(timeout) * time.Second,
+				Retries:  retries,
+			}
+		}
+	} else {
+		var annotions map[string]interface{}
+		if err := json.Unmarshal([]byte(podSpec.Annotation), &annotions); err == nil {
+			if healthcheck, ok := annotions["healthcheck"]; ok {
+				port := podSpec.Containers[0].Expose
+				healthcheckUrl, ok := healthcheck.(string)
+				if ok {
+					url := "http://localhost:" + strconv.Itoa(port) + healthcheckUrl
+					cmd := fmt.Sprintf(CURL_TMPLT, url)
+					cc.Healthcheck = &adoc.HealthConfig{
+						Test:     []string{"CMD-SHELL", "timeout " + strconv.Itoa(DefaultHealthTimeout) + " " + cmd + " || exit 1"},
+						Interval: DefaultHealthInterval * time.Second,
+						Timeout:  DefaultHealthTimeout * time.Second,
+						Retries:  DefaultHealthRetries,
+					}
+				}
+			} else {
+				log.Info("annotation without healthcheck")
+			}
+		} else {
+			log.Errorf("unmarsha podSpec.Annotation %v err:%v", podSpec.Annotation, err)
+		}
+	}
+
 	if spec.Expose > 0 {
 		cc.ExposedPorts = map[string]struct{}{
 			fmt.Sprintf("%d/tcp", spec.Expose): struct{}{},

@@ -101,9 +101,42 @@ func (client *DockerClient) RemoveImage(name string, force, noprune bool) error 
 	return err
 }
 
+func (client *DockerClient) TagImage(name string, repo string, tag string, force bool) error {
+	v := url.Values{}
+	v.Set("force", formatBoolToIntString(force))
+	v.Set("repo", repo)
+	v.Set("tag", tag)
+	uri := fmt.Sprintf("images/%s/tag?%s", name, v.Encode())
+	_, err := client.sendRequest("POST", uri, nil, nil)
+	return err
+}
+
+func (client *DockerClient) PushImage(name string, repo string, tag string, authConfig ...AuthConfig) error {
+	v := url.Values{}
+	v.Set("tag", tag)
+	uri := fmt.Sprintf("images/%s/%s/push?%s", repo, name, v.Encode())
+	header := make(map[string]string)
+	if len(authConfig) > 0 {
+		header["X-Registry-Auth"] = authConfig[0].Encode()
+	}
+	err := client.sendRequestCallback("POST", uri, nil, header, func(resp *http.Response) error {
+		var status map[string]interface{}
+		var cbErr error
+		decoder := json.NewDecoder(resp.Body)
+		for ; cbErr == nil; cbErr = decoder.Decode(&status) {
+		}
+		if cbErr != io.EOF {
+			return cbErr
+		}
+		if errMsg, ok := status["error"]; ok {
+			return fmt.Errorf("Push image error: %s", errMsg)
+		}
+		return nil
+	}, true)
+	return err
+}
+
 // Missing apis for
 // build: Build image from a Dockerfile
 // images/(name)/history
-// images/(name)/push
-// images/(name)/tag
 // images/search

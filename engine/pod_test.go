@@ -12,15 +12,15 @@ import (
 func TestPodController(t *testing.T) {
 	etcdAddr := "http://192.168.77.21:4001"
 	swarmAddr := "tcp://192.168.77.21:2376"
-	isDebug := true
+	isDebug := false
 
 	log.EnableDebug()
-	store, err := etcd.NewStore(etcdAddr, isDebug)
+	_, err := etcd.NewStore(etcdAddr, isDebug)
 	if err != nil {
 		t.Errorf("Cannot init the etcd storage")
 	}
 
-	c, err := swarm.NewCluster(swarmAddr, 30*time.Second, 10*time.Minute, nm, isDebug)
+	c, err := swarm.NewCluster(swarmAddr, 30*time.Second, 10*time.Minute, isDebug)
 	if err != nil {
 		t.Errorf("Cannot init the swarm cluster manager")
 	}

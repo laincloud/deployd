@@ -32,6 +32,26 @@ type Container struct {
 	Status     string
 }
 
+type HealthConfig struct {
+	// Test is the test to perform to check that the container is healthy.
+	// An empty slice means to inherit the default.
+	// The options are:
+	// {} : inherit healthcheck
+	// {"NONE"} : disable healthcheck
+	// {"CMD", args...} : exec arguments directly
+	// {"CMD-SHELL", command} : run command with system's default shell
+	Test []string `json:",omitempty"`
+
+	// Zero means to inherit. Durations are expressed as integer nanoseconds.
+	Interval    time.Duration `json:",omitempty"` // Interval is the time to wait between checks.
+	Timeout     time.Duration `json:",omitempty"` // Timeout is the time to wait before considering the check to have hung.
+	StartPeriod time.Duration `json:",omitempty"` // The start period for the container to initialize before the retries starts to count down.
+
+	// Retries is the number of consecutive failures needed to consider a container as unhealthy.
+	// Zero means inherit.
+	Retries int `json:",omitempty"`
+}
+
 // ContainerConfig defines basic container creation data stucture
 type ContainerConfig struct {
 	AttachStderr    bool
@@ -44,6 +64,7 @@ type ContainerConfig struct {
 	Entrypoint      []string
 	Env             []string
 	ExposedPorts    map[string]struct{}
+	Healthcheck     *HealthConfig `json:",omitempty"`
 	Hostname        string
 	Image           string
 	Labels          map[string]string
@@ -61,7 +82,6 @@ type ContainerConfig struct {
 	Volumes         map[string]struct{}
 	WorkingDir      string
 }
-
 type Device struct {
 	PathOnHost        string
 	PathInContainer   string
@@ -140,6 +160,11 @@ type NetworkSettings struct {
 	Networks               map[string]Networks
 }
 
+type Health struct {
+	Status        string // Status is one of Starting, Healthy or Unhealthy
+	FailingStreak int    // FailingStreak is the number of consecutive failures
+}
+
 // ContainerState defines container running state from inspection
 type ContainerState struct {
 	Dead       bool
@@ -152,6 +177,7 @@ type ContainerState struct {
 	Restarting bool
 	Running    bool
 	StartedAt  time.Time
+	Health     *Health
 }
 
 // SwarmNode defines the swarm api data for container running node

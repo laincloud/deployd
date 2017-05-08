@@ -9,6 +9,7 @@ import (
 
 	"github.com/laincloud/deployd/cluster"
 	"github.com/laincloud/deployd/storage"
+	"github.com/laincloud/deployd/utils/util"
 	"github.com/mijia/adoc"
 	"github.com/mijia/sweb/log"
 )
@@ -136,7 +137,8 @@ func (engine *OrcEngine) NewPodGroup(spec PodGroupSpec) error {
 	if _, ok := engine.rmPgCtrls[spec.Name]; ok {
 		return ErrPodGroupCleaning
 	}
-
+	spec.CreatedAt = time.Now()
+	spec.Pod.CreatedAt = spec.CreatedAt
 	for _, depends := range spec.Pod.Dependencies {
 		if _, ok := engine.dependsCtrls[depends.PodName]; !ok {
 			//We will allow the weak reference to the dependency pods and won't return an error
@@ -180,6 +182,7 @@ func (engine *OrcEngine) RemovePodGroup(name string) error {
 	if pgCtrl, ok := engine.pgCtrls[name]; !ok {
 		return ErrPodGroupNotExists
 	} else {
+		log.Infof("start delete %v\n", name)
 		engine.opsChan <- orcOperRemove{pgCtrl}
 		delete(engine.pgCtrls, name)
 		engine.rmPgCtrls[name] = pgCtrl
@@ -334,6 +337,7 @@ func (engine *OrcEngine) initPodGroupCtrl(spec PodGroupSpec, states []PodPrevSta
 // This will be running inside the go routine
 func (engine *OrcEngine) initOperationWorker() {
 	tick := time.Tick(time.Duration(RefreshInterval) * time.Second)
+	portsTick := time.Tick(5 * time.Minute)
 	for {
 		select {
 		case op := <-engine.opsChan:
@@ -369,6 +373,8 @@ func (engine *OrcEngine) initOperationWorker() {
 				}
 			}
 			engine.RUnlock()
+		case <-portsTick:
+			RefreshPorts(engine.pgCtrls)
 		case <-engine.stop:
 			if len(engine.opsChan) == 0 {
 				return
@@ -502,6 +508,32 @@ func (engine *OrcEngine) startClusterMonitor() {
 						downCount += 1
 					}
 					engine.onClusterNodeLost(event.Node.Name, downCount)
+				}
+			} else if strings.HasPrefix(event.Status, "health_status") {
+				id := event.Id
+				if cont, err := engine.cluster.InspectContainer(id); err == nil {
+					status := HealthState(HealthStateNone)
+					switch event.Status {
+					case "health_status: starting":
+						status = HealthStateStarting
+					case "health_status: healthy":
+						status = HealthStateHealthy
+					case "health_status: unhealthy":
+						status = HealthStateUnHealthy
+					}
+					containerName := strings.TrimLeft(cont.Name, "/")
+					if podName, instance, err := util.ParseNameInstanceNo(containerName); err == nil {
+						pgCtrl, ok := engine.pgCtrls[podName]
+						if ok {
+							if len(pgCtrl.podCtrls) >= instance {
+								pgCtrl.podCtrls[instance-1].pod.Healthst = status
+								pgCtrl.opsChan <- pgOperSnapshotGroup{true}
+								pgCtrl.opsChan <- pgOperSaveStore{true}
+							}
+						}
+					}
+				} else {
+					log.Errorf("ParseNameInstanceNo error:%v", err)
 				}
 			}
 		}

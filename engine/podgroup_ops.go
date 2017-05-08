@@ -150,6 +150,10 @@ func (op pgOperRefreshInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 	}
 
 	if runtime.State == RunStateSuccess {
+		if runtime.Healthst == HealthStateUnHealthy {
+			log.Warnf("PodGroupCtrl %s, we found pod unhealthy", op.spec)
+			ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name, op.instanceNo, NotifyPodUnHealthy))
+		}
 		if generics.Equal_StringSlice(evIds, podCtrl.pod.ContainerIds()) && op.spec.Version == evVersion {
 			pod := podCtrl.pod.Clone()
 			pgCtrl.emitChangeEvent("verify", podCtrl.spec, pod, pod.NodeName())
@@ -209,7 +213,13 @@ func (op pgOperRefreshInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 			return false
 		}
 		log.Warnf("PodGroupCtrl %s, we found pod down, just restart it", op.spec)
-		ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name, op.instanceNo, NotifyPodDown))
+		if podCtrl.pod.OOMkilled {
+			log.Errorf("pod down with oom:%v", op.spec)
+			ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name, op.instanceNo, NotifyPodDownOOM))
+		} else {
+			ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name, op.instanceNo, NotifyPodDown))
+		}
+
 		podCtrl.Start(c)
 		runtime = podCtrl.pod.ImRuntime
 		if runtime.State == RunStateSuccess {
@@ -238,10 +248,6 @@ func (op pgOperVerifyInstanceCount) Do(pgCtrl *podGroupController, c cluster.Clu
 	for _, podContainer := range pgCtrl.evSnapshot {
 		if podContainer.InstanceNo > op.spec.NumInstances {
 			cId := podContainer.Container.Id
-			log.Warnf("PodGroupCtrl %s we found container %s with iNo=%d, beyond the necessary instance counts %d, will remove it",
-				op.spec, cId, podContainer.InstanceNo, op.spec.NumInstances)
-			log.Warnf("PodGroupCtrl %s we found container %s with iNo=%d, beyond the necessary instance counts %d, will remove it",
-				op.spec, cId, podContainer.InstanceNo, op.spec.NumInstances)
 			log.Warnf("PodGroupCtrl %s we found container %s with iNo=%d, beyond the necessary instance counts %d, will remove it",
 				op.spec, cId, podContainer.InstanceNo, op.spec.NumInstances)
 			c.StopContainer(cId, op.spec.Pod.GetKillTimeout())
@@ -332,6 +338,7 @@ func (op pgOperSnapshotGroup) Do(pgCtrl *podGroupController, c cluster.Cluster, 
 	}()
 
 	group.State = RunStateSuccess
+	group.Healthst = HealthStateHealthy
 	group.LastError = ""
 	group.Pods = make([]Pod, spec.NumInstances)
 	for i, podCtrl := range pgCtrl.podCtrls {
@@ -339,6 +346,9 @@ func (op pgOperSnapshotGroup) Do(pgCtrl *podGroupController, c cluster.Cluster, 
 		if podCtrl.pod.State != RunStateSuccess {
 			group.State = podCtrl.pod.State
 			group.LastError = podCtrl.pod.LastError
+		}
+		if podCtrl.pod.Healthst != HealthStateHealthy {
+			group.Healthst = podCtrl.pod.Healthst
 		}
 	}
 	if op.updateTime {
@@ -461,7 +471,6 @@ type pgOperLogOperation struct {
 func (op pgOperLogOperation) Do(pgCtrl *podGroupController, c cluster.Cluster, store storage.Store, ev *RuntimeEagleView) bool {
 	pgCtrl.RLock()
 	defer pgCtrl.RUnlock()
-	log.Infof("%s %s", pgCtrl, op.msg)
 	return false
 }
 

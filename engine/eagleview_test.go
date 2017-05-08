@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mijia/sweb/log"
 	"github.com/laincloud/deployd/cluster/swarm"
 	"github.com/laincloud/deployd/storage/etcd"
+	"github.com/mijia/sweb/log"
 )
 
 func TestEagleViewRefresh(t *testing.T) {
@@ -16,12 +16,12 @@ func TestEagleViewRefresh(t *testing.T) {
 	isDebug := true
 
 	log.EnableDebug()
-	store, err := etcd.NewStore(etcdAddr, isDebug)
+	_, err := etcd.NewStore(etcdAddr, isDebug)
 	if err != nil {
 		t.Errorf("Cannot init the etcd storage")
 	}
 
-	kluster, err := swarm.NewCluster(swarmAddr, 30*time.Second, 10*time.Minute, nm, isDebug)
+	kluster, err := swarm.NewCluster(swarmAddr, 30*time.Second, 10*time.Minute, isDebug)
 	if err != nil {
 		t.Errorf("Cannot init the swarm cluster manager")
 	}

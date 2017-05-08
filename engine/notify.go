@@ -16,10 +16,12 @@ import (
 )
 
 var (
-	NotifyPodMissing = "LAIN found pod missing, ready to redeployd it"
-	NotifyPodDown    = "LAIN found pod down, ready to restart it"
-	NotifyLetPodGo   = "LAIN found pod restart too many times in a short period, will let it go"
-	NotifyPodIPLost  = "LAIN found pod lost IP, please inform the SA team"
+	NotifyPodMissing   = "LAIN found pod missing, ready to redeployd it"
+	NotifyPodDown      = "LAIN found pod down, ready to restart it"
+	NotifyPodDownOOM   = "LAIN found pod down with oom, ready to restart it"
+	NotifyLetPodGo     = "LAIN found pod restart too many times in a short period, will let it go"
+	NotifyPodIPLost    = "LAIN found pod lost IP, please inform the SA team"
+	NotifyPodUnHealthy = "LAIN found pod Unhealthy, please check your service"
 )
 
 type notifyController struct {
@@ -131,14 +133,12 @@ func (nc *notifyController) CallbackList(callbackMap map[string]string) []string
 }
 
 func (nc *notifyController) Send(notifySpec NotifySpec) {
-	log.Infof("Receiving nofity request: %s", notifySpec)
 	nc.callbackChan <- notifySpec
 }
 
 func (nc *notifyController) Notify(notifySpec NotifySpec) {
 	nc.Lock()
 	defer nc.Unlock()
-	log.Infof("Ready sending notify request: %s", notifySpec)
 	callbackList := nc.CallbackList(nc.callbacks)
 	for i := 0; i < len(callbackList); i++ {
 		uri := callbackList[i]

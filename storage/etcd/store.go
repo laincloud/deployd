@@ -8,8 +8,8 @@ import (
 	"sync"
 
 	"github.com/coreos/etcd/client"
-	"golang.org/x/net/context"
 	"github.com/laincloud/deployd/storage"
+	"golang.org/x/net/context"
 )
 
 type EtcdStore struct {
@@ -21,7 +21,7 @@ type EtcdStore struct {
 }
 
 func (store *EtcdStore) Get(key string, v interface{}) error {
-	if resp, err := store.keysApi.Get(store.ctx, key, nil); err != nil {
+	if resp, err := store.keysApi.Get(store.ctx, key, &client.GetOptions{Quorum: true}); err != nil {
 		if cerr, ok := err.(client.Error); ok && cerr.Code == client.ErrorCodeKeyNotFound {
 			return storage.ErrNoSuchKey
 		}
@@ -44,7 +44,7 @@ func (store *EtcdStore) Get(key string, v interface{}) error {
 func (store *EtcdStore) KeysByPrefix(prefix string) ([]string, error) {
 	// Prefix should corresponding to a directory name, and will return all the nodes inside the directory
 	keys := make([]string, 0)
-	if resp, err := store.keysApi.Get(store.ctx, prefix, nil); err != nil {
+	if resp, err := store.keysApi.Get(store.ctx, prefix, &client.GetOptions{Quorum: true}); err != nil {
 		if cerr, ok := err.(client.Error); ok && cerr.Code == client.ErrorCodeKeyNotFound {
 			return keys, storage.ErrNoSuchKey
 		}

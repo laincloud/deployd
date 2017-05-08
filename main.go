@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	VERSION = "2.0.4"
+	VERSION = "2.1.2"
 )
 
 func main() {
@@ -56,6 +56,8 @@ func main() {
 	engine.RestartInfoClearInterval = time.Duration(restartInfoClearInterval) * time.Minute
 
 	server := apiserver.New(swarmAddr, etcdAddr, isDebug)
+
+	engine.ConfigPostManager(etcdAddr)
 
 	if advertise == "" {
 		// no advertise, running without election
