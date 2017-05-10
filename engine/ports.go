@@ -160,6 +160,14 @@ func (pm PortsManager) RegisterStreamPorts(spArr ...*StreamProc) (bool, []int) {
 	return true, nil
 }
 
+func (pm PortsManager) UpdateStreamPorts(spArr ...*StreamProc) {
+	pm.lock.Lock()
+	defer pm.lock.Unlock()
+	for _, sp := range spArr {
+		pm.UpdateStreamPort(sp)
+	}
+}
+
 func (pm PortsManager) CancelStreamPorts(spArr ...*StreamProc) {
 	pm.lock.Lock()
 	defer pm.lock.Unlock()
@@ -183,6 +191,11 @@ func (pm PortsManager) RegisterStreamPort(sp *StreamProc) bool {
 	return putValue(pm.etcd, key, sp, false)
 }
 
+func (pm *PortsManager) UpdateStreamPort(sp *StreamProc) bool {
+	key := fmt.Sprintf(KeyPrefixStreamPorts+"/%d", sp.SrcPort)
+	return putValue(pm.etcd, key, sp, true)
+}
+
 func (pm *PortsManager) CancelStreamPort(sp *StreamProc) bool {
 	key := fmt.Sprintf(KeyPrefixStreamPorts+"/%d", sp.SrcPort)
 	return delValue(pm.etcd, key)
@@ -190,6 +203,10 @@ func (pm *PortsManager) CancelStreamPort(sp *StreamProc) bool {
 
 func RegisterPorts(sps ...*StreamProc) (bool, []int) {
 	return pm.RegisterStreamPorts(sps...)
+}
+
+func UpdatePorts(sps ...*StreamProc) {
+	pm.UpdateStreamPorts(sps...)
 }
 
 func CancelPorts(sps ...*StreamProc) {

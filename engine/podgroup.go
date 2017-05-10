@@ -328,12 +328,21 @@ func (pgCtrl *podGroupController) updatePodPorts(podSpec PodSpec) bool {
 		//register fresh ports && cancel dated ports
 		freshArr := make([]*StreamProc, 0)
 		datedArr := make([]*StreamProc, 0)
+		updateArr := make([]*StreamProc, 0)
 		var exists bool
 		for _, fresh := range sps.Ports {
 			exists = false
 			for _, dated := range oldsps.Ports {
 				if dated.Equals(fresh) {
 					exists = true
+					break
+				} else if dated.SrcPort == fresh.SrcPort {
+					exists = true
+					updateArr = append(freshArr, &StreamProc{
+						StreamPort: fresh,
+						NameSpace:  pgCtrl.spec.Namespace,
+						ProcName:   pgCtrl.spec.Name,
+					})
 					break
 				}
 			}
@@ -349,7 +358,7 @@ func (pgCtrl *podGroupController) updatePodPorts(podSpec PodSpec) bool {
 		for _, dated := range oldsps.Ports {
 			exists = false
 			for _, fresh := range sps.Ports {
-				if dated.Equals(fresh) {
+				if dated.SrcPort == fresh.SrcPort {
 					exists = true
 					break
 				}
@@ -362,8 +371,10 @@ func (pgCtrl *podGroupController) updatePodPorts(podSpec PodSpec) bool {
 				})
 			}
 		}
+
 		succ, existsPorts := RegisterPorts(freshArr...)
 		if succ {
+			UpdatePorts(updateArr...)
 			CancelPorts(datedArr...)
 			return true
 		} else {
