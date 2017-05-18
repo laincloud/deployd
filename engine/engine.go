@@ -496,7 +496,7 @@ func (engine *OrcEngine) startClusterMonitor() {
 			log.Warnf("Error during the cluster event monitor, will try to restart the monitor, %s", err)
 			restart <- true
 		} else {
-			log.Debugf("Cluster event: %+v", event)
+			log.Debugf("Cluster event: %v", event)
 			if strings.HasPrefix(event.From, "swarm") {
 				switch event.Status {
 				case "engine_disconnect":
