@@ -160,6 +160,9 @@ func (pod Pod) NeedRestart(policy RestartPolicy) bool {
 }
 
 func (pod Pod) RestartEnoughTimes() bool {
+	if len(pod.Containers) > 0 && pod.RestartAt.Add(2*RestartInfoClearInterval).Before(pod.Containers[0].Runtime.State.FinishedAt) {
+		return false
+	}
 	return pod.RestartCount >= RestartMaxCount
 }
 
