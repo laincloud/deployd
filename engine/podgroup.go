@@ -49,7 +49,9 @@ func (pgCtrl *podGroupController) IsHealthy() bool {
 	defer pgCtrl.RUnlock()
 	for _, pc := range pgCtrl.podCtrls {
 		if pc.pod.PodIp() == "" {
-			ntfController.Send(NewNotifySpec(pc.spec.Namespace, pc.spec.Name, pc.pod.InstanceNo, NotifyPodIPLost))
+			if pc.pod.State == RunStateSuccess {
+				ntfController.Send(NewNotifySpec(pc.spec.Namespace, pc.spec.Name, pc.pod.InstanceNo, time.Now(), NotifyPodIPLost))
+			}
 			return false
 		}
 	}

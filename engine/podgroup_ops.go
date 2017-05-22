@@ -148,11 +148,12 @@ func (op pgOperRefreshInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 			}
 		}
 	}
-
+	container := podCtrl.pod.Containers[0]
 	if runtime.State == RunStateSuccess {
 		if runtime.Healthst == HealthStateUnHealthy {
 			log.Warnf("PodGroupCtrl %s, we found pod unhealthy", op.spec)
-			ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name, op.instanceNo, NotifyPodUnHealthy))
+			ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name,
+				op.instanceNo, time.Now(), NotifyPodUnHealthy))
 		}
 		if generics.Equal_StringSlice(evIds, podCtrl.pod.ContainerIds()) && op.spec.Version == evVersion {
 			pod := podCtrl.pod.Clone()
@@ -179,7 +180,8 @@ func (op pgOperRefreshInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 			}
 		} else {
 			log.Warnf("PodGroupCtrl %s, we found pod missing, just redeploy it", op.spec)
-			ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name, op.instanceNo, NotifyPodMissing))
+			ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name,
+				op.instanceNo, container.Runtime.State.FinishedAt, NotifyPodMissing))
 			newPodSpec := podCtrl.spec.Clone()
 			prevNodeName := newPodSpec.PrevState.NodeName
 			if newPodSpec.IsHardStateful() {
@@ -209,15 +211,18 @@ func (op pgOperRefreshInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 	}
 	if podCtrl.pod.NeedRestart(op.spec.RestartPolicy) {
 		if podCtrl.pod.RestartEnoughTimes() {
-			ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name, op.instanceNo, NotifyLetPodGo))
+			ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name,
+				op.instanceNo, container.Runtime.State.FinishedAt, NotifyLetPodGo))
 			return false
 		}
 		log.Warnf("PodGroupCtrl %s, we found pod down, just restart it", op.spec)
 		if podCtrl.pod.OOMkilled {
 			log.Errorf("pod down with oom:%v", op.spec)
-			ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name, op.instanceNo, NotifyPodDownOOM))
+			ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name,
+				op.instanceNo, container.Runtime.State.FinishedAt, NotifyPodDownOOM))
 		} else {
-			ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name, op.instanceNo, NotifyPodDown))
+			ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name,
+				op.instanceNo, container.Runtime.State.FinishedAt, NotifyPodDown))
 		}
 
 		podCtrl.Start(c)

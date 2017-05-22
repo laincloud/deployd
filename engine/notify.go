@@ -18,7 +18,7 @@ import (
 var (
 	NotifyPodMissing   = "LAIN found pod missing, ready to redeployd it"
 	NotifyPodDown      = "LAIN found pod down, ready to restart it"
-	NotifyPodDownOOM   = "LAIN found pod down with oom, ready to restart it"
+	NotifyPodDownOOM   = "LAIN found pod down with OOM, ready to restart it"
 	NotifyLetPodGo     = "LAIN found pod restart too many times in a short period, will let it go"
 	NotifyPodIPLost    = "LAIN found pod lost IP, please inform the SA team"
 	NotifyPodUnHealthy = "LAIN found pod Unhealthy, please check your service"
@@ -41,13 +41,13 @@ type NotifySpec struct {
 	Message    string
 }
 
-func NewNotifySpec(namespace string, podName string, instanceNo int, message string) NotifySpec {
+func NewNotifySpec(namespace string, podName string, instanceNo int, timestamp time.Time, message string) NotifySpec {
 	notifySpec := NotifySpec{
 		Level:      "Error",
 		Namespace:  namespace,
 		PodName:    podName,
 		InstanceNo: instanceNo,
-		Timestamp:  time.Now(),
+		Timestamp:  timestamp,
 		Message:    message,
 	}
 	return notifySpec
