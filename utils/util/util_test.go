@@ -1,19 +1,27 @@
 package util
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func Test_ParseNameInstanceNo(t *testing.T) {
 	containerName := "webrouter.worker.worker.v0-i1-d0"
-	if name, incetance, err := ParseNameInstanceNo(containerName); err == nil {
-		fmt.Printf("name:%v,incetance:%v\n", name, incetance)
-	} else {
-		fmt.Println("err:%v\n", err)
-	}
+
+	name, incetance, err := ParseNameInstanceNo(containerName)
+	assert.Equal(t, nil, err)
+	assert.Equal(t, "webrouter.worker.worker", name)
+	assert.Equal(t, 1, incetance)
+}
+
+func Test_IsConnectionError(t *testing.T) {
+	err := errors.New("dial tcp 192.168.77.21:2376: getsockopt: connection refused")
+	assert.Equal(t, true, IsConnectionError(err))
 }
 
 func Test_deepEqual(t *testing.T) {

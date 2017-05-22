@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/laincloud/deployd/cluster"
+	"github.com/laincloud/deployd/utils/util"
 	"github.com/mijia/adoc"
 	"github.com/mijia/go-generics"
 	"github.com/mijia/sweb/log"
@@ -69,14 +70,18 @@ func (pc *podController) Deploy(cluster cluster.Cluster) {
 		id, err := pc.createContainer(cluster, filters, i)
 		if err != nil {
 			log.Warnf("%s Cannot create container, error=%q, spec=%+v", pc, err, cSpec)
-			pc.pod.State = RunStateFail
+			if !util.IsConnectionError(err) {
+				pc.pod.State = RunStateFail
+			}
 			pc.pod.LastError = fmt.Sprintf("Cannot create container, %s", err)
 			return
 		}
 
 		if err := cluster.StartContainer(id); err != nil {
 			log.Warnf("%s Cannot start container %s, %s", pc, id, err)
-			pc.pod.State = RunStateFail
+			if !util.IsConnectionError(err) {
+				pc.pod.State = RunStateFail
+			}
 			pc.pod.LastError = fmt.Sprintf("Cannot start container, %s", err)
 		}
 
@@ -177,7 +182,9 @@ func (pc *podController) Stop(cluster cluster.Cluster) {
 	for i, container := range pc.pod.Containers {
 		if err := cluster.StopContainer(container.Id, pc.spec.GetKillTimeout()); err != nil {
 			log.Warnf("%s Cannot stop the container %s, %s", pc, container.Id, err)
-			pc.pod.State = RunStateFail
+			if !util.IsConnectionError(err) {
+				pc.pod.State = RunStateFail
+			}
 			pc.pod.LastError = fmt.Sprintf("Cannot stop container, %s", err)
 		} else {
 			pc.refreshContainer(cluster, i)
@@ -200,7 +207,9 @@ func (pc *podController) Start(cluster cluster.Cluster) {
 	for i, container := range pc.pod.Containers {
 		if err := cluster.StartContainer(container.Id); err != nil {
 			log.Warnf("%s Cannot start the container %s, %s", pc, container.Id, err)
-			pc.pod.State = RunStateFail
+			if !util.IsConnectionError(err) {
+				pc.pod.State = RunStateFail
+			}
 			pc.pod.LastError = fmt.Sprintf("Cannot start container, %s", err)
 		} else {
 			pc.refreshContainer(cluster, i)
@@ -273,7 +282,9 @@ func (pc *podController) refreshContainer(kluster cluster.Cluster, index int) {
 			pc.pod.LastError = fmt.Sprintf("Missing container %q, %s", id, err)
 		} else {
 			log.Warnf("%s Failed to inspect container %s, %s", pc, id, err)
-			pc.pod.State = RunStateFail
+			if !util.IsConnectionError(err) {
+				pc.pod.State = RunStateFail
+			}
 			pc.pod.LastError = fmt.Sprintf("Cannot inspect the container, %s", err)
 		}
 	} else {
@@ -282,7 +293,6 @@ func (pc *podController) refreshContainer(kluster cluster.Cluster, index int) {
 			network = pc.spec.Namespace
 		}
 		prevIP, nowIP := pc.spec.PrevState.IPs[index], info.NetworkSettings.Networks[network].IPAddress
-
 		// NOTE: if the container's ip is not equal to prev ip, try to correct it; if failed, accpet new ip
 		if prevIP != "" && prevIP != nowIP {
 			log.Warnf("%s find the IP changed, prev is %s, but now is %s, try to correct it", pc, prevIP, nowIP)
