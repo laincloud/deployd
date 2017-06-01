@@ -1,0 +1,18 @@
+sudo: required
+language: go
+services:
+- docker
+go:
+- 1.8.1
+install:
+- go get github.com/Masterminds/glide
+before_script: 
+script:
+- "./build.sh"
+deploy:
+  provider: releases
+  api_key:
+    secure: NZjqwP3WFYrQSqwdad4HfdJKFGAOBuoRZx5CQQutg94Y92Le5JtgGXpzNSZA8jYoK5PjJCRBE0BQbT/VZv8DDN6U7qMhZkblaqeISxralrZZOh1wVA/bn6TlOcci2SYSMEVSakT/V4dwAJESO3P6KRZQUaOHktY0OlCZWp2n5NpLEQBf7H+r+UwibUoBizATrTfN+K0/2kbbyvx4G6Dcouo9T92N2A1di5ZUWCH6XBwdVOVRfco1Ove11PaEyrylQc08Mspo7KE44xLUDE4kvkjvlDZT34uAQn0cNF/EtWbF2oXsMRpNvr9d7H5iie8WEfbT5NYFb2gAp6fIvTdsCEhOOz6h5GIHHAeJGPtTg13g+ZW5jB+Yux/d/h5FNSYTkwn0ozPqMgBIn90as9qNkl+IQxasDlGb7j+C2PwF6DSsTIVM4yTGz+fzJV1dr4fu2Pb3ux4Gxbb9cXOzJAqBShh3xYS+XX3Vba8WOYI8iA7KMSC3ZJQ3L17HUOhQ7nKlR+5Ph5b5xUZ9TNQa6rdUEMItVPTrI7ZKOWXGY2xhEEc1It0t4np/AoWrLggyTwq8JDEAZwukbn+X1U4OD18gkFW5R0COtKT+r3URFRbgdv015H3KXz/2saIkVxJBIQCrxuJUC5dnCesZmupvYlQ5i9nyDiW1osOB+0zNOD084qU=
+  file: bin/deployd
+  on:
+    tags: true
