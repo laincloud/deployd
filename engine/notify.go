@@ -22,6 +22,8 @@ var (
 	NotifyLetPodGo     = "LAIN found pod restart too many times in a short period, will let it go"
 	NotifyPodIPLost    = "LAIN found pod lost IP, please inform the SA team"
 	NotifyPodUnHealthy = "LAIN found pod Unhealthy, please check your service"
+
+	NotifyClusterUnHealthy = "LAIN found Cluster Manager Unhealthy, please check your cluster"
 )
 
 type notifyController struct {

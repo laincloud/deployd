@@ -180,8 +180,9 @@ func (op pgOperRefreshInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 			}
 		} else {
 			log.Warnf("PodGroupCtrl %s, we found pod missing, just redeploy it", op.spec)
-			ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name,
-				op.instanceNo, container.Runtime.State.FinishedAt, NotifyPodMissing))
+			//pod missing usually happended when agent was down, so no need to notify app users
+			// ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name,
+			// 	op.instanceNo, container.Runtime.State.FinishedAt, NotifyPodMissing))
 			newPodSpec := podCtrl.spec.Clone()
 			prevNodeName := newPodSpec.PrevState.NodeName
 			if newPodSpec.IsHardStateful() {

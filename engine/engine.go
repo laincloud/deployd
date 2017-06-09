@@ -31,6 +31,10 @@ var (
 	ErrNotifyNotExists        = errors.New("Notify uri not existed")
 )
 
+const (
+	ClusterFailedThreadSold = 20
+)
+
 type OrcEngine struct {
 	sync.RWMutex
 
@@ -43,6 +47,7 @@ type OrcEngine struct {
 	rmDepCtrls   map[string]*dependsController
 	opsChan      chan orcOperation
 	stop         chan struct{}
+	clstrFailCnt int
 }
 
 const (
@@ -334,6 +339,18 @@ func (engine *OrcEngine) initPodGroupCtrl(spec PodGroupSpec, states []PodPrevSta
 	return pgCtrl
 }
 
+func (engine *OrcEngine) clusterRequestFailed() {
+	engine.clstrFailCnt++
+	if engine.clstrFailCnt > ClusterFailedThreadSold && engine.clstrFailCnt%ClusterFailedThreadSold == 0 {
+		ntfController.Send(NewNotifySpec("Cluster", "Cluster-Manager",
+			1, time.Now(), NotifyClusterUnHealthy))
+	}
+}
+
+func (engine *OrcEngine) clusterRequestSucceed() {
+	engine.clstrFailCnt = 0
+}
+
 // This will be running inside the go routine
 func (engine *OrcEngine) initOperationWorker() {
 	tick := time.Tick(time.Duration(RefreshInterval) * time.Second)
@@ -493,9 +510,11 @@ func (engine *OrcEngine) startClusterMonitor() {
 	downCount := 0
 	eventMonitorId := engine.cluster.MonitorEvents("", func(event adoc.Event, err error) {
 		if err != nil {
-			log.Warnf("Error during the cluster event monitor, will try to restart the monitor, %s", err)
+			// log.Warnf("Error during the cluster event monitor, will try to restart the monitor, %s", err)
+			engine.clusterRequestFailed()
 			restart <- true
 		} else {
+			engine.clusterRequestSucceed()
 			log.Debugf("Cluster event: %v", event)
 			if strings.HasPrefix(event.From, "swarm") {
 				switch event.Status {
@@ -559,6 +578,7 @@ func New(cluster cluster.Cluster, store storage.Store) (*OrcEngine, error) {
 		rmDepCtrls:   make(map[string]*dependsController),
 		opsChan:      make(chan orcOperation, 500),
 		stop:         nil,
+		clstrFailCnt: 0,
 	}
 
 	eagleView := NewRuntimeEagleView()
