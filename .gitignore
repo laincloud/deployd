@@ -26,3 +26,6 @@ _testmain.go
 lain-deployd*
 assets_gen.go
 deployd*
+.idea/
+bin/
+vendor/

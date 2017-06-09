@@ -1,0 +1,39 @@
+hash: 0ea235a754301f0f460e49b6d0e508855e24f13f78a537f2cdd7ac071bf4e9a5
+updated: 2017-06-01T11:56:12.354192457+08:00
+imports:
+- name: github.com/coreos/etcd
+  version: d267ca9c184e953554257d0acdd1dc9c47d38229
+  subpackages:
+  - client
+  - pkg/pathutil
+  - pkg/types
+- name: github.com/docker/libkv
+  version: aabc039ad04deb721e234f99cd1b4aa28ac71a40
+  subpackages:
+  - store
+  - store/etcd
+- name: github.com/julienschmidt/httprouter
+  version: 975b5c4c7c21c0e3d2764200bf2aa8e34657ae6e
+- name: github.com/mijia/adoc
+  version: 6d1c7dedb19c9c1530a56447c0186f7f39825b00
+- name: github.com/mijia/go-generics
+  version: 2278a5f0de143e1d17ea16d56e7f85391bdb85a3
+- name: github.com/mijia/sweb
+  version: 4919e73674ef98e133d7f5e1d87c3963653c12b1
+  subpackages:
+  - form
+  - log
+  - server
+- name: github.com/paulbellamy/ratecounter
+  version: 66b206d2a2d00245e34b1494fcaeef5e99041ea7
+- name: github.com/stretchr/graceful
+  version: d72b0151351a13d0421b763b88f791469c4f5dc7
+- name: github.com/ugorji/go
+  version: ded73eae5db7e7a0ef6f55aace87a2873c5d2b74
+  subpackages:
+  - codec
+- name: golang.org/x/net
+  version: f2499483f923065a842d38eb4c7f1927e6fc6e6d
+  subpackages:
+  - context
+testImports: []
