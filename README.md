@@ -1,5 +1,8 @@
 # Lain Deloyd
 
+[![Build Status](https://travis-ci.org/laincloud/deployd.svg?branch=master)](https://travis-ci.org/laincloud/deployd) [![MIT license](https://img.shields.io/github/license/mashape/apistatus.svg)](https://opensource.org/licenses/MIT)
+
+
 ## 基本介绍
 
 Deployd是负责Lain中底层容器编排的组件。将用户层对proc和portal等概念操作映射为实际的container操作，包括对container进行启停，升级和迁移等。Deployd会对所有的container定时巡检，自动修复异常的container，以确保服务的正常。
