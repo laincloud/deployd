@@ -164,6 +164,8 @@ func (pgCtrl *podGroupController) RescheduleSpec(podSpec PodSpec) {
 	for i := 0; i < spec.NumInstances; i += 1 {
 		pgCtrl.waitLastPodStarted(i, podSpec)
 		pgCtrl.opsChan <- pgOperUpgradeInstance{i + 1, spec.Version, oldPodSpec, spec.Pod}
+		pgCtrl.opsChan <- pgOperSnapshotGroup{true}
+		pgCtrl.opsChan <- pgOperSaveStore{true}
 	}
 	pgCtrl.opsChan <- pgOperSnapshotGroup{true}
 	pgCtrl.opsChan <- pgOperSnapshotPrevState{}
@@ -390,6 +392,10 @@ func (pgCtrl *podGroupController) updatePodPorts(podSpec PodSpec) bool {
 
 func (pgCtrl *podGroupController) waitLastPodStarted(i int, podSpec PodSpec) {
 	retries := 5
+	sleepTime := 10
+	if podSpec.GetSetupTime() > 10 {
+		sleepTime = podSpec.GetSetupTime()
+	}
 	if i > 0 {
 		// wait some seconds for new instance's initialization completed, before we update next one
 		if pgCtrl.podCtrls[i].pod.Healthst == HealthStateNone {
@@ -405,7 +411,7 @@ func (pgCtrl *podGroupController) waitLastPodStarted(i int, podSpec PodSpec) {
 				if pgCtrl.podCtrls[i-1].pod.Healthst != HealthStateStarting {
 					break
 				}
-				time.Sleep(time.Second * 10)
+				time.Sleep(time.Second * time.Duration(sleepTime))
 			}
 		}
 	}
