@@ -8,7 +8,7 @@ import (
 
 func TestRegisterPorts(t *testing.T) {
 	fmt.Println("Start")
-	ConfigPostManager("http://127.0.0.1:4001")
+	ConfigPortsManager("http://127.0.0.1:2379")
 	test := make([]*StreamProc, 0)
 	for i := 0; i < 2; i++ {
 		test = append(test, &StreamProc{

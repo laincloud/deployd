@@ -10,10 +10,11 @@ import (
 	"github.com/laincloud/deployd/cluster/swarm"
 	"github.com/laincloud/deployd/storage"
 	"github.com/laincloud/deployd/storage/etcd"
-	"github.com/mijia/sweb/log"
 )
 
 func TestPodGroupRefresh(t *testing.T) {
+	etcdAddr := "http://127.0.0.1:2379"
+	ConfigPortsManager(etcdAddr)
 	c, store, err := initClusterAndStore()
 	if err != nil {
 		t.Fatalf("Cannot create the cluster and storage, %s", err)
@@ -44,7 +45,7 @@ func TestPodGroupRefresh(t *testing.T) {
 		}
 	}
 
-	time.Sleep(85 * time.Second)
+	time.Sleep(10 * time.Second)
 
 	if pg, ok := engine.InspectPodGroup(name); !ok {
 		t.Errorf("We should have the pod group, but we don't get it")
@@ -60,6 +61,8 @@ func TestPodGroupRefresh(t *testing.T) {
 }
 
 func TestEnginePodGroup(t *testing.T) {
+	etcdAddr := "http://127.0.0.1:2379"
+	ConfigPortsManager(etcdAddr)
 	c, store, err := initClusterAndStore()
 	if err != nil {
 		t.Fatalf("Cannot create the cluster and storage, %s", err)
@@ -80,7 +83,7 @@ func TestEnginePodGroup(t *testing.T) {
 		t.Errorf("Should return exists error, but we got no problem")
 	}
 
-	time.Sleep(3 * time.Second)
+	time.Sleep(10 * time.Second)
 	if pg, ok := engine.InspectPodGroup(name); !ok {
 		t.Errorf("We should have the pod group, but we don't get it")
 	} else if pg.State != RunStateSuccess {
@@ -88,7 +91,7 @@ func TestEnginePodGroup(t *testing.T) {
 	}
 
 	engine.RescheduleInstance(name, 3)
-	time.Sleep(8 * time.Second)
+	time.Sleep(10 * time.Second)
 	if pg, ok := engine.InspectPodGroup(name); !ok {
 		t.Errorf("We should have the pod group, but we don't get it")
 	} else if len(pg.Pods) != 3 {
@@ -111,7 +114,7 @@ func TestEnginePodGroup(t *testing.T) {
 	podSpec := createPodSpec(namespace, name)
 	podSpec.Containers[0].MemoryLimit = 24 * 1024 * 1024
 	engine.RescheduleSpec(name, podSpec)
-	time.Sleep(60 * time.Second)
+	time.Sleep(20 * time.Second)
 	if pg, ok := engine.InspectPodGroup(name); !ok {
 		t.Errorf("We should have the pod group, but we don't get it")
 	} else if pg.Spec.Version != 2 {
@@ -123,22 +126,19 @@ func TestEnginePodGroup(t *testing.T) {
 	} else if err := engine.NewPodGroup(pgSpec); err == nil {
 		t.Errorf("We should not be able to deploy pod group again in short time we remove it")
 	}
-
 	time.Sleep(20 * time.Second)
 }
 
 func initClusterAndStore() (cluster.Cluster, storage.Store, error) {
-	etcdAddr := "http://192.168.77.21:4001"
-	swarmAddr := "tcp://192.168.77.21:2376"
-	isDebug := true
+	etcdAddr := "http://127.0.0.1:2379"
+	swarmAddr := "tcp://127.0.0.1:2376"
 
-	log.EnableDebug()
-	store, err := etcd.NewStore(etcdAddr, isDebug)
+	store, err := etcd.NewStore(etcdAddr, false)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	c, err := swarm.NewCluster(swarmAddr, 30*time.Second, 10*time.Minute, isDebug)
+	c, err := swarm.NewCluster(swarmAddr, 30*time.Second, 10*time.Minute)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -159,6 +159,6 @@ func createPodSpec(namespace, name string) PodSpec {
 	podSpec := NewPodSpec(cSpec)
 	podSpec.Name = name
 	podSpec.Namespace = namespace
-	podSpec.Annotation = fmt.Sprintf("Unit test for %s", name)
+	podSpec.Annotation = fmt.Sprintf("{\"test\":\"Unit test for %s\"}", name)
 	return podSpec
 }

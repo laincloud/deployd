@@ -73,9 +73,15 @@ func (ev *RuntimeEagleView) RefreshPodGroup(c cluster.Cluster, pgName string) ([
 	filters := []string{
 		fmt.Sprintf("%s.pg_name=%s", kLainLabelPrefix, pgName),
 	}
-	pods, err := ev.refreshByFilters(c, filters)
-	totalContainers = len(pods)
-	return pods, err
+	if pods, err := ev.refreshByFilters(c, filters); err == nil {
+		ev.podGroups[pgName] = pods
+		totalContainers = len(pods)
+		return pods, nil
+	} else {
+		log.Errorf("refresh by filter failed :%v ", err)
+		return nil, err
+	}
+
 }
 
 func (ev *RuntimeEagleView) RefreshPodsByNamespace(c cluster.Cluster, namespace string) ([]RuntimeEaglePod, error) {

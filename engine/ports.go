@@ -17,11 +17,15 @@ const (
 )
 
 var (
-	pm *PortsManager
+	once sync.Once
+	pm   *PortsManager
 )
 
-func ConfigPostManager(endpoint string) {
-	pm = NewPortsManager(endpoint)
+func ConfigPortsManager(endpoint string) {
+	onceBody := func() {
+		pm = NewPortsManager(endpoint)
+	}
+	once.Do(onceBody)
 }
 
 type StreamPort struct {
@@ -71,6 +75,7 @@ func NewPortsManager(endpoint string) *PortsManager {
 	c, err := etcd.New(cfg)
 	if err != nil {
 		log.Errorf("NewPortsManager with error:%v\n", err)
+		return nil
 	}
 	return &PortsManager{
 		etcd: &c,

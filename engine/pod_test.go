@@ -10,20 +10,21 @@ import (
 )
 
 func TestPodController(t *testing.T) {
-	etcdAddr := "http://192.168.77.21:4001"
-	swarmAddr := "tcp://192.168.77.21:2376"
+	etcdAddr := "http://127.0.0.1:2379"
+	swarmAddr := "tcp://127.0.0.1:2376"
 	isDebug := false
 
-	log.EnableDebug()
 	_, err := etcd.NewStore(etcdAddr, isDebug)
 	if err != nil {
 		t.Errorf("Cannot init the etcd storage")
 	}
 
-	c, err := swarm.NewCluster(swarmAddr, 30*time.Second, 10*time.Minute, isDebug)
+	c, err := swarm.NewCluster(swarmAddr, 30*time.Second, 10*time.Minute)
 	if err != nil {
 		t.Errorf("Cannot init the swarm cluster manager")
 	}
+
+	cstController = NewConstraintController()
 
 	cSpec := NewContainerSpec("training/webapp")
 	cSpec.Command = []string{"python", "app.py"}
@@ -43,44 +44,45 @@ func TestPodController(t *testing.T) {
 
 	pc.Deploy(c)
 	if pc.pod.State != RunStateSuccess {
-		t.Errorf("Pod should be deployed")
+		t.Fatal("Pod should be deployed")
 	}
 
 	cId := pc.pod.Containers[0].Id
 
 	ev := NewRuntimeEagleView()
 	if _, err := ev.RefreshPodGroup(c, podSpec.Name); err != nil {
-		t.Errorf("Failed to refresh the pod group")
+		t.Fatal("Failed to refresh the pod group")
 	}
 	podContainers, ok := ev.GetRuntimeEaglePods(podSpec.Name)
 	if !ok || len(podContainers) == 0 {
-		t.Errorf("Failed to get the runtime eagle pods from swarm")
+		t.Fatal("Failed to get the runtime eagle pods from swarm")
 	}
+	log.Infof("podContainers:%v len:%v", podContainers, len(podContainers))
 	if podContainers[0].Container.Id != cId {
-		t.Errorf("Should have the same container id as we deployed")
+		t.Fatal("Should have the same container id as we deployed")
 	}
 
 	pc.Refresh(c)
 	if pc.pod.State != RunStateSuccess {
-		t.Errorf("The pod should be in success run state")
+		t.Fatal("The pod should be in success run state")
 	}
 
 	pc.Stop(c)
 	if pc.pod.State != RunStateFail {
-		t.Errorf("The pod should be stopped and exited")
+		t.Fatal("The pod should be stopped and exited")
 	}
 
 	pc.Start(c)
 	if pc.pod.State != RunStateSuccess {
-		t.Errorf("The pod should be restarted and in success run state")
+		t.Fatal("The pod should be restarted and in success run state")
 	}
 
 	pc.Remove(c)
 	if err := ev.Refresh(c); err != nil {
-		t.Errorf("Failed to refresh the pod group")
+		t.Fatal("Failed to refresh the pod group")
 	}
 	podContainers, ok = ev.GetRuntimeEaglePods(podSpec.Name)
 	if ok {
-		t.Errorf("Should not get data for the pods")
+		t.Fatal("Should not get data for the pods")
 	}
 }

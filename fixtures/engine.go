@@ -7,19 +7,15 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/mijia/sweb/log"
 	"github.com/laincloud/deployd/cluster/swarm"
 	"github.com/laincloud/deployd/engine"
 	"github.com/laincloud/deployd/storage/etcd"
+	"github.com/mijia/sweb/log"
 )
 
 func main() {
-	debug := true
-	if debug {
-		log.EnableDebug()
-	}
 	timeout := time.Duration(30 * time.Second)
-	cluster, err := swarm.NewCluster("tcp://192.168.51.21:8178", timeout, 30*time.Minute, debug)
+	cluster, err := swarm.NewCluster("tcp://192.168.51.21:8178", timeout, 30*time.Minute)
 	if err != nil {
 		panic(err)
 	}

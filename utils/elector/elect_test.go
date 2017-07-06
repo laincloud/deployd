@@ -1,6 +1,7 @@
 package elector
 
 import (
+	"fmt"
 	"github.com/docker/libkv"
 	"github.com/docker/libkv/store"
 	"os"
@@ -15,8 +16,8 @@ var (
 )
 
 func init() {
-	etcds = strings.Split(os.Getenv("ETCD_TEST"), ",")
-	e, err = New(etcds, LeaderKey, "127.0.0.1:2378")
+	etcds = strings.Split(os.Getenv("ETCD_TEST"), "127.0.0.1:2379")
+	e, err = New(etcds, LeaderKey, "127.0.0.1:2376")
 	if err != nil {
 		panic(err)
 	}
@@ -30,6 +31,7 @@ func TestRunElection(t *testing.T) {
 	ch := e.Run(stop)
 
 	st, err := libkv.NewStore(store.ETCD, etcds, nil)
+	fmt.Println(st)
 	if err != nil {
 		t.Error(err)
 	}

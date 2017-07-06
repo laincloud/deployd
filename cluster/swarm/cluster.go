@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/mijia/adoc"
 	"github.com/laincloud/deployd/cluster"
+	"github.com/mijia/adoc"
 )
 
 type SwarmCluster struct {
@@ -32,13 +32,10 @@ func (c *SwarmCluster) GetResources() ([]cluster.Node, error) {
 	}
 }
 
-func NewCluster(addr string, timeout, rwTimeout time.Duration, debug ...bool) (cluster.Cluster, error) {
+func NewCluster(addr string, timeout, rwTimeout time.Duration) (cluster.Cluster, error) {
 	docker, err := adoc.NewSwarmClientTimeout(addr, nil, timeout, rwTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("Cannot connect swarm master[%s], %s", addr, err)
-	}
-	if len(debug) > 0 && debug[0] {
-		adoc.EnableDebug()
 	}
 	swarm := &SwarmCluster{}
 	swarm.DockerClient = docker

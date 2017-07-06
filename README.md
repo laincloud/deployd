@@ -1,6 +1,6 @@
 # Lain Deloyd
 
-[![Build Status](https://travis-ci.org/laincloud/deployd.svg?branch=master)](https://travis-ci.org/laincloud/deployd) [![MIT license](https://img.shields.io/github/license/mashape/apistatus.svg)](https://opensource.org/licenses/MIT)
+[![Build Status](https://travis-ci.org/laincloud/deployd.svg?branch=master)](https://travis-ci.org/laincloud/deployd) [![codecov](https://codecov.io/gh/laincloud/deployd/branch/master/graph/badge.svg)](https://codecov.io/gh/laincloud/deployd) [![MIT license](https://img.shields.io/github/license/mashape/apistatus.svg)](https://opensource.org/licenses/MIT)
 
 
 ## 基本介绍
