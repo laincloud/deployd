@@ -22,6 +22,7 @@ const (
 	kLainVolumeRoot      = "/data/lain/volumes"
 	kLainCloudVolumeRoot = "/data/lain/cloud-volumes"
 	kLainLabelPrefix     = "cc.bdp.lain.deployd"
+	kLainLogVolumePath   = "/lain/logs"
 
 	MinPodSetupTime = 0
 	MaxPodSetupTime = 300
@@ -327,6 +328,9 @@ func (s PodSpec) IsStateful() bool {
 
 func (s PodSpec) HasVolumes() bool {
 	for _, container := range s.Containers {
+		if len(container.Volumes) == 1 && container.Volumes[0] == kLainLogVolumePath {
+			continue
+		}
 		if len(container.Volumes) > 0 {
 			return true
 		}
@@ -364,6 +368,23 @@ func (s PodSpec) Equals(o PodSpec) bool {
 }
 
 func (s PodSpec) Merge(o PodSpec) PodSpec {
+	// deal with params keeping original
+	if len(s.Containers) > 0 {
+		sc := s.Containers[0]
+		for i, _ := range o.Containers {
+			if i >= len(s.Containers) {
+				sc = s.Containers[0]
+			} else {
+				sc = s.Containers[i]
+			}
+			if o.Containers[i].CpuLimit == 0 {
+				o.Containers[i].CpuLimit = sc.CpuLimit
+			}
+			if o.Containers[i].MemoryLimit == 0 {
+				o.Containers[i].MemoryLimit = sc.MemoryLimit
+			}
+		}
+	}
 	s.Containers = o.Containers
 	s.Dependencies = o.Dependencies
 	s.Filters = o.Filters

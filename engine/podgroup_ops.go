@@ -163,6 +163,9 @@ func (op pgOperRefreshInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 	}
 
 	if runtime.State == RunStateMissing {
+		if !FetchGuard().Working {
+			return false
+		}
 		foundRuntime := false
 		for i, cId := range evIds {
 			if cId != "" {

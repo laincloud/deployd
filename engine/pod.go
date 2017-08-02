@@ -23,6 +23,11 @@ const (
 	DefaultHealthTimeout  = 5
 	DefaultHealthRetries  = 3
 
+	CPUQuota        = int64(1000000)
+	CPUMaxPctg      = 50 // max percentage of total cpu
+	CPUMaxLevel     = 8
+	CPUDeafultLevel = 2
+
 	CURL_TMPLT = `echo $(curl -s -o /dev/null -w '%%{http_code}\n' %s) | grep -Eq "^[2-3]..$"`
 )
 
@@ -406,9 +411,6 @@ func (pc *podController) createContainerConfig(filters []string, index int) adoc
 		Image:      spec.Image,
 		Cmd:        spec.Command,
 		Env:        injectEnvs,
-		Memory:     spec.MemoryLimit,
-		MemorySwap: spec.MemoryLimit,
-		CpuShares:  spec.CpuLimit,
 		User:       spec.User,
 		WorkingDir: spec.WorkingDir,
 		Volumes:    volumes,
@@ -479,7 +481,18 @@ func (pc *podController) createContainerConfig(filters []string, index int) adoc
 func (pc *podController) createHostConfig(index int) adoc.HostConfig {
 	podSpec := pc.spec
 	spec := podSpec.Containers[index]
-	hc := adoc.HostConfig{}
+	if spec.CpuLimit > CPUMaxLevel {
+		spec.CpuLimit = CPUMaxLevel
+	} else if spec.CpuLimit < 1 {
+		spec.CpuLimit = CPUDeafultLevel
+	}
+	resource := FetchResource()
+	hc := adoc.HostConfig{
+		Memory:     spec.MemoryLimit,
+		MemorySwap: spec.MemoryLimit,
+		CPUPeriod:  CPUQuota,
+		CPUQuota:   int64(spec.CpuLimit*resource.Cpu*CPUMaxPctg) * CPUQuota / int64(CPUMaxLevel*100),
+	}
 	if spec.Expose > 0 {
 		hc.PortBindings = map[string][]adoc.PortBinding{
 			fmt.Sprintf("%d/tcp", spec.Expose): []adoc.PortBinding{

@@ -6,6 +6,7 @@ import (
 	"hash/fnv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/coreos/etcd/client"
 	"github.com/laincloud/deployd/storage"
@@ -39,6 +40,26 @@ func (store *EtcdStore) Get(key string, v interface{}) error {
 		}
 	}
 	return nil
+}
+
+func (store *EtcdStore) Watch(key string) chan string {
+	resp := make(chan string)
+	errSleepTime := 10 * time.Second
+	go func() {
+		for {
+			wather := store.keysApi.Watcher(key, &client.WatcherOptions{Recursive: true})
+			for {
+				if response, err := wather.Next(store.ctx); err == nil {
+					if response.Node == nil || response.Node.Dir {
+						continue
+					}
+					resp <- response.Node.Value
+				}
+			}
+			time.Sleep(errSleepTime)
+		}
+	}()
+	return resp
 }
 
 func (store *EtcdStore) KeysByPrefix(prefix string) ([]string, error) {

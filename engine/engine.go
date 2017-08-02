@@ -257,6 +257,18 @@ func (engine *OrcEngine) Stop() {
 	engine.stop = nil
 }
 
+func (engine *OrcEngine) GuardGotoSleep() bool {
+	engine.Lock()
+	defer engine.Unlock()
+	return GuardGotoSleep(engine.store)
+}
+
+func (engine *OrcEngine) GuardGotoWork() bool {
+	engine.Lock()
+	defer engine.Unlock()
+	return GuardGotoWork(engine.store)
+}
+
 func (engine *OrcEngine) Started() bool {
 	return engine.stop != nil
 }
@@ -580,6 +592,7 @@ func New(cluster cluster.Cluster, store storage.Store) (*OrcEngine, error) {
 		stop:         nil,
 		clstrFailCnt: 0,
 	}
+	watchResource(store)
 
 	eagleView := NewRuntimeEagleView()
 	//if err := eagleView.Refresh(cluster); err != nil {
