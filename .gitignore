@@ -29,3 +29,4 @@ deployd*
 .idea/
 bin/
 vendor/
+*DS_Store

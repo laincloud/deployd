@@ -58,6 +58,7 @@ func (s *Server) ListenAndServe(addr string) error {
 	s.AddRestfulResource("/api/constraints", "RestfulConstraints", RestfulConstraints{})
 	s.AddRestfulResource("/api/notifies", "RestfulNotifies", RestfulNotifies{})
 	s.AddRestfulResource("/api/ports", "RestfulPorts", RestfulPorts{})
+	s.AddRestfulResource("/api/guard", "RestfulGuard", RestfulGuard{})
 
 	s.Get("/debug/vars", "RuntimeStat", s.getRuntimeStat)
 	s.NotFound(func(ctx context.Context, w http.ResponseWriter, r *http.Request) context.Context {

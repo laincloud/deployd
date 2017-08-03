@@ -2,6 +2,7 @@ package apiserver
 
 import (
 	"fmt"
+	"github.com/laincloud/deployd/engine"
 	"github.com/mijia/sweb/form"
 	"github.com/mijia/sweb/log"
 	"github.com/mijia/sweb/server"
@@ -40,5 +41,33 @@ func (rs RestfulStatus) Get(ctx context.Context, r *http.Request) (int, interfac
 	}
 	return http.StatusOK, map[string]string{
 		"status": status,
+	}
+}
+
+type RestfulGuard struct {
+	server.BaseResource
+}
+
+func (rs RestfulGuard) Get(ctx context.Context, r *http.Request) (int, interface{}) {
+	status := "sleeping"
+	if engine.FetchGuard().Working {
+		status = "working"
+	}
+	return http.StatusOK, map[string]string{
+		"guard": status,
+	}
+}
+
+func (rs RestfulGuard) Post(ctx context.Context, r *http.Request) (int, interface{}) {
+	work := form.ParamBoolean(r, "work", false)
+	eg := getEngine(ctx)
+	ok := "Failed"
+	if work && eg.GuardGotoWork() {
+		ok = "OK"
+	} else if eg.GuardGotoSleep() {
+		ok = "OK"
+	}
+	return http.StatusOK, map[string]string{
+		"successed": ok,
 	}
 }
