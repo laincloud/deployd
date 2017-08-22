@@ -396,7 +396,7 @@ func (engine *OrcEngine) initOperationWorker() {
 					index++
 					go func() {
 						log.Infof("%s will be refreshed after %d seconds", _depCtrl, interval/1000)
-						time.Sleep(time.Duration(interval) * time.Millisecond)
+						time.Sleep(time.Duration(RefreshInterval/2*1000+interval) * time.Millisecond)
 						engine.opsChan <- orcOperDependsRefresh{_depCtrl}
 					}()
 				}
