@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	VERSION = "2.3.0"
+	VERSION = "2.4.0"
 )
 
 func main() {
@@ -57,7 +57,7 @@ func main() {
 
 	server := apiserver.New(swarmAddr, etcdAddr, isDebug)
 
-	engine.ConfigPostManager(etcdAddr)
+	engine.ConfigPortsManager(etcdAddr)
 
 	if advertise == "" {
 		// no advertise, running without election

@@ -6,7 +6,6 @@ import (
 	"github.com/laincloud/deployd/cluster/swarm"
 	"github.com/laincloud/deployd/engine"
 	setcd "github.com/laincloud/deployd/storage/etcd"
-	"github.com/mijia/adoc"
 	"github.com/mijia/sweb/log"
 	"github.com/mijia/sweb/server"
 	"golang.org/x/net/context"
@@ -172,7 +171,7 @@ func initOrcEngine(swarmAddr string, etcdAddr string, isDebug bool) (*engine.Orc
 		return nil, err
 	}
 
-	cluster, err := swarm.NewCluster(swarmAddr, 30*time.Second, 10*time.Minute, isDebug)
+	cluster, err := swarm.NewCluster(swarmAddr, 30*time.Second, 10*time.Minute)
 	if err != nil {
 		return nil, err
 	}
@@ -187,9 +186,6 @@ func New(swarmAddr, etcdAddr string, isDebug bool) *Server {
 		started:      false,
 		engine:       nil,
 		runtime:      nil,
-	}
-	if isDebug {
-		adoc.EnableDebug()
 	}
 	return srv
 }

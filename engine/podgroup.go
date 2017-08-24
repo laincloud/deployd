@@ -39,8 +39,8 @@ func (pgCtrl *podGroupController) String() string {
 }
 
 func (pgCtrl *podGroupController) Inspect() PodGroupWithSpec {
-	pgCtrl.RLock()
-	defer pgCtrl.RUnlock()
+	pgCtrl.Lock()
+	defer pgCtrl.Unlock()
 	return PodGroupWithSpec{pgCtrl.spec, pgCtrl.prevState, pgCtrl.group}
 }
 
@@ -147,7 +147,7 @@ func (pgCtrl *podGroupController) RescheduleSpec(podSpec PodSpec) {
 	if spec.Pod.Equals(podSpec) {
 		return
 	}
-	pgCtrl.group.LastError = ""
+	pgCtrl.emptyError()
 	if ok := pgCtrl.updatePodPorts(podSpec); !ok {
 		return
 	}
@@ -292,7 +292,7 @@ func (pgCtrl *podGroupController) checkPodPorts() bool {
 	spec := pgCtrl.spec
 	var sps StreamPorts
 	if err := json.Unmarshal([]byte(spec.Pod.Annotation), &sps); err != nil {
-		log.Errorf("annotation unmarshal error:%v\n", err)
+		log.Errorf("annotation unmarshal, %v, error:%v\n", spec.Pod.Annotation, err)
 		return false
 	}
 	stProc := make([]*StreamProc, 0, len(sps.Ports))
@@ -415,6 +415,12 @@ func (pgCtrl *podGroupController) waitLastPodStarted(i int, podSpec PodSpec) {
 			}
 		}
 	}
+}
+
+func (pgCtrl *podGroupController) emptyError() {
+	pgCtrl.Lock()
+	defer pgCtrl.Unlock()
+	pgCtrl.group.LastError = ""
 }
 
 func newPodGroupController(spec PodGroupSpec, states []PodPrevState, pg PodGroup) *podGroupController {
