@@ -33,7 +33,7 @@ after_success:
 - bash <(curl -s https://codecov.io/bash)
 - xz -9k bin/deployd
 - if [ "$TRAVIS_TAG" != "" ]; then
-  ossutil cp bin/deployd.xz oss://lain/binary/deployd/releases/download/${TRAVIS_TAG}/deployd.xz -e ${ENDPOINT} -i ${ACCESS_KEY_ID} -k ${ACCESS_KEY_SECRET};
+  ossutil cp bin/deployd.xz oss://lain/binary/deployd/releases/download/${TRAVIS_TAG}/deployd.xz -f -e ${ALIYUN_OSS_ENDPOINT} -i ${ALIYUN_OSS_ACCESS_KEY_ID} -k ${ALIYUN_OSS_ACCESS_KEY_SECRET};
   fi
 deploy:
   provider: releases
