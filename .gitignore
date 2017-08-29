@@ -30,3 +30,7 @@ deployd*
 bin/
 vendor/
 *DS_Store
+coverage.txt
+default.etcd/
+etcd-v2.3.7-linux-amd64.tar.gz
+etcd-v2.3.7-linux-amd64/
