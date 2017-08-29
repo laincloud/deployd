@@ -42,5 +42,6 @@ deploy:
   file:
   - bin/deployd
   - bin/deployd.xz
+  skip_cleanup: true
   on:
     tags: true
