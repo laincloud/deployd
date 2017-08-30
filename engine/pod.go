@@ -417,56 +417,50 @@ func (pc *podController) createContainerConfig(filters []string, index int) adoc
 		Entrypoint: spec.Entrypoint,
 		Labels:     labelsMap,
 	}
-	if podSpec.HealthConfig.Cmd != "" {
-		if podSpec.HealthConfig.Cmd == "none" {
+	if podSpec.HealthConfig.Cmd == "none" {
+		cc.Healthcheck = &adoc.HealthConfig{
+			Test: []string{"NONE"},
+		}
+	} else {
+		interval := DefaultHealthInterval
+		timeout := DefaultHealthTimeout
+		retries := DefaultHealthRetries
+		cmd := podSpec.HealthConfig.Cmd
+		if podSpec.HealthConfig.Options.Interval > 0 {
+			interval = podSpec.HealthConfig.Options.Interval
+		}
+		if podSpec.HealthConfig.Options.Timeout > 0 {
+			timeout = podSpec.HealthConfig.Options.Timeout
+		} else if podSpec.GetSetupTime() > DefaultHealthTimeout {
+			timeout = podSpec.GetSetupTime()
+		}
+		if podSpec.HealthConfig.Options.Retries > 0 {
+			retries = podSpec.HealthConfig.Options.Retries
+		}
+		if cmd == "" {
+			var annotions map[string]interface{}
+			if err := json.Unmarshal([]byte(podSpec.Annotation), &annotions); err == nil {
+				if healthcheck, ok := annotions["healthcheck"]; ok {
+					port := spec.Expose
+					healthcheckUrl, ok := healthcheck.(string)
+					if ok {
+						url := "http://localhost:" + strconv.Itoa(port) + healthcheckUrl
+						cmd = fmt.Sprintf(CURL_TMPLT, url)
+					}
+				} else {
+					log.Info("annotation without healthcheck")
+				}
+			} else {
+				log.Errorf("unmarsha podSpec.Annotation %v err:%v", podSpec.Annotation, err)
+			}
+		}
+		if cmd != "" {
 			cc.Healthcheck = &adoc.HealthConfig{
-				Test: []string{"NONE"},
-			}
-		} else {
-			interval := DefaultHealthInterval
-			timeout := DefaultHealthTimeout
-			retries := DefaultHealthRetries
-
-			if podSpec.HealthConfig.Options.Interval > 0 {
-				interval = podSpec.HealthConfig.Options.Interval
-			}
-
-			if podSpec.HealthConfig.Options.Timeout > 0 {
-				interval = podSpec.HealthConfig.Options.Timeout
-			}
-
-			if podSpec.HealthConfig.Options.Retries > 0 {
-				interval = podSpec.HealthConfig.Options.Retries
-			}
-
-			cc.Healthcheck = &adoc.HealthConfig{
-				Test:     []string{"CMD-SHELL", "timeout " + strconv.Itoa(timeout) + " " + pc.spec.HealthConfig.Cmd + " || exit 1"},
+				Test:     []string{"CMD-SHELL", "timeout " + strconv.Itoa(timeout) + " " + cmd + " || exit 1"},
 				Interval: time.Duration(interval) * time.Second,
 				Timeout:  time.Duration(timeout) * time.Second,
 				Retries:  retries,
 			}
-		}
-	} else {
-		var annotions map[string]interface{}
-		if err := json.Unmarshal([]byte(podSpec.Annotation), &annotions); err == nil {
-			if healthcheck, ok := annotions["healthcheck"]; ok {
-				port := podSpec.Containers[0].Expose
-				healthcheckUrl, ok := healthcheck.(string)
-				if ok {
-					url := "http://localhost:" + strconv.Itoa(port) + healthcheckUrl
-					cmd := fmt.Sprintf(CURL_TMPLT, url)
-					cc.Healthcheck = &adoc.HealthConfig{
-						Test:     []string{"CMD-SHELL", "timeout " + strconv.Itoa(DefaultHealthTimeout) + " " + cmd + " || exit 1"},
-						Interval: DefaultHealthInterval * time.Second,
-						Timeout:  DefaultHealthTimeout * time.Second,
-						Retries:  DefaultHealthRetries,
-					}
-				}
-			} else {
-				log.Info("annotation without healthcheck")
-			}
-		} else {
-			log.Errorf("unmarsha podSpec.Annotation %v err:%v", podSpec.Annotation, err)
 		}
 	}
 
