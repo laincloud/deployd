@@ -3,7 +3,10 @@ package storage
 import "errors"
 
 var (
-	ErrNoSuchKey = errors.New("No such key")
+	KMissingError    = errors.New("No such key")
+	KNilNodeError    = errors.New("Etcd Store returns a nil node")
+	KDirNodeError    = errors.New("Etcd Store returns this is a directory node")
+	KNonDirNodeError = errors.New("Etcd Store returns this is a non-directory node")
 )
 
 type Store interface {

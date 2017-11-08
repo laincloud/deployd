@@ -1,9 +1,8 @@
 package engine
 
 import (
-	"time"
-
 	"github.com/mijia/adoc"
+	"time"
 )
 
 type RunState int
@@ -63,7 +62,7 @@ func (hs HealthState) String() string {
 	case HealthStateUnHealthy:
 		return "unhealthy"
 	default:
-		return "None"
+		return "none"
 	}
 }
 

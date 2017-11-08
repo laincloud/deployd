@@ -32,7 +32,7 @@ func (cc *constraintController) LoadConstraints(store storage.Store) error {
 	constraints := make(map[string]ConstraintSpec)
 	cstKey := fmt.Sprintf("%s/%s", kLainDeploydRootKey, kLainConstraintKey)
 	if cstNames, err := store.KeysByPrefix(cstKey); err != nil {
-		if err != storage.ErrNoSuchKey {
+		if err != storage.KMissingError {
 			return err
 		}
 	} else {

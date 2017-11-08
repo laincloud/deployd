@@ -33,7 +33,7 @@ func TestPodGroupRefresh(t *testing.T) {
 		t.Fatalf("Should not return error, %s", err)
 	}
 
-	time.Sleep(10 * time.Second)
+	time.Sleep(20 * time.Second)
 	if pg, ok := engine.InspectPodGroup(name); !ok {
 		t.Errorf("We should have the pod group, but we don't get it")
 	} else if pg.State != RunStateSuccess {
@@ -45,7 +45,7 @@ func TestPodGroupRefresh(t *testing.T) {
 		}
 	}
 
-	time.Sleep(10 * time.Second)
+	time.Sleep(20 * time.Second)
 
 	if pg, ok := engine.InspectPodGroup(name); !ok {
 		t.Errorf("We should have the pod group, but we don't get it")
@@ -57,7 +57,7 @@ func TestPodGroupRefresh(t *testing.T) {
 		t.Errorf("We should be able to remove the pod group, %s", err)
 	}
 
-	time.Sleep(10 * time.Second)
+	time.Sleep(20 * time.Second)
 }
 
 func TestEnginePodGroup(t *testing.T) {
@@ -83,7 +83,7 @@ func TestEnginePodGroup(t *testing.T) {
 		t.Errorf("Should return exists error, but we got no problem")
 	}
 
-	time.Sleep(10 * time.Second)
+	time.Sleep(20 * time.Second)
 	if pg, ok := engine.InspectPodGroup(name); !ok {
 		t.Errorf("We should have the pod group, but we don't get it")
 	} else if pg.State != RunStateSuccess {
@@ -91,7 +91,7 @@ func TestEnginePodGroup(t *testing.T) {
 	}
 
 	engine.RescheduleInstance(name, 3)
-	time.Sleep(10 * time.Second)
+	time.Sleep(20 * time.Second)
 	if pg, ok := engine.InspectPodGroup(name); !ok {
 		t.Errorf("We should have the pod group, but we don't get it")
 	} else if len(pg.Pods) != 3 {

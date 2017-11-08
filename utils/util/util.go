@@ -10,19 +10,16 @@ import (
 )
 
 func ParseNameInstanceNo(containerName string) (string, int, error) {
-	if p, err := regex.Compile(`(.*)\.v([0-9]+)-i([0-9]+)-d([0-9]+)`); err != nil {
-		return "", 0, err
-	} else {
-		g := p.Match(containerName)
-		if g == nil {
-			return "", 0, errors.New("Container Match Failed!")
-		}
-		instance, err := strconv.Atoi(g.Group(3))
-		if err != nil {
-			return "", 0, err
-		}
-		return g.Group(1), instance, nil
+	p := regex.MustCompile(`(.*)\.v([0-9]+)-i([0-9]+)-d([0-9]+)`)
+	g := p.Match(containerName)
+	if g == nil {
+		return "", 0, errors.New("Container Match Failed!")
 	}
+	instance, err := strconv.Atoi(g.Group(3))
+	if err != nil {
+		return "", 0, err
+	}
+	return g.Group(1), instance, nil
 }
 
 func IsConnectionError(err error) bool {

@@ -143,7 +143,7 @@ func (pgCtrl *podGroupController) RescheduleSpec(podSpec PodSpec) {
 	pgCtrl.RLock()
 	spec := pgCtrl.spec.Clone()
 	pgCtrl.RUnlock()
-
+	// pgCtrl.group.Pods[0].NodeName()
 	if spec.Pod.Equals(podSpec) {
 		return
 	}
@@ -162,7 +162,7 @@ func (pgCtrl *podGroupController) RescheduleSpec(podSpec PodSpec) {
 	pgCtrl.opsChan <- pgOperSaveStore{true}
 	pgCtrl.opsChan <- pgOperSnapshotEagleView{spec.Name}
 	for i := 0; i < spec.NumInstances; i += 1 {
-		pgCtrl.waitLastPodStarted(i, podSpec)
+		pgCtrl.waitLastPodHealthy(i, podSpec)
 		pgCtrl.opsChan <- pgOperUpgradeInstance{i + 1, spec.Version, oldPodSpec, spec.Pod}
 		pgCtrl.opsChan <- pgOperSnapshotGroup{true}
 		pgCtrl.opsChan <- pgOperSaveStore{true}
@@ -183,7 +183,7 @@ func (pgCtrl *podGroupController) RescheduleDrift(fromNode, toNode string, insta
 	pgCtrl.opsChan <- pgOperLogOperation{fmt.Sprintf("Start to reschedule drift from %s", fromNode)}
 	if instanceNo == -1 {
 		for i := 0; i < spec.NumInstances; i += 1 {
-			pgCtrl.waitLastPodStarted(i, spec.Pod)
+			pgCtrl.waitLastPodHealthy(i, spec.Pod)
 			pgCtrl.opsChan <- pgOperDriftInstance{i + 1, fromNode, toNode, force}
 		}
 	} else {
@@ -390,29 +390,33 @@ func (pgCtrl *podGroupController) updatePodPorts(podSpec PodSpec) bool {
 	return true
 }
 
-func (pgCtrl *podGroupController) waitLastPodStarted(i int, podSpec PodSpec) {
+func (pgCtrl *podGroupController) waitLastPodHealthy(i int, podSpec PodSpec) {
+	if pgCtrl.podCtrls[i].pod.Healthst != HealthStateNone {
+		pgCtrl.podCtrls[i].pod.Healthst = HealthStateStarting
+	}
+	if i <= 0 {
+		return
+	}
 	retries := 5
-	sleepTime := 10
-	if podSpec.GetSetupTime() > 10 {
+	sleepTime := DefaultSetUpTime
+	if podSpec.GetSetupTime() > DefaultSetUpTime {
 		sleepTime = podSpec.GetSetupTime()
 	}
-	if i > 0 {
-		// wait some seconds for new instance's initialization completed, before we update next one
-		if pgCtrl.podCtrls[i].pod.Healthst == HealthStateNone {
-			time.Sleep(time.Second * time.Duration(podSpec.GetSetupTime()))
-		} else {
-			retryTimes := 0
-			for {
-				if retryTimes == retries {
-					break
-				}
-				retryTimes++
-				// wait until to non-starting state
-				if pgCtrl.podCtrls[i-1].pod.Healthst != HealthStateStarting {
-					break
-				}
-				time.Sleep(time.Second * time.Duration(sleepTime))
+	// wait some seconds for new instance's initialization completed, before we update next one
+	if pgCtrl.podCtrls[i].pod.Healthst == HealthStateNone {
+		time.Sleep(time.Second * time.Duration(podSpec.GetSetupTime()))
+	} else {
+		retryTimes := 0
+		for {
+			if retryTimes == retries {
+				break
 			}
+			retryTimes++
+			// wait until to healthy state
+			if pgCtrl.podCtrls[i-1].pod.Healthst == HealthStateHealthy {
+				break
+			}
+			time.Sleep(time.Second * time.Duration(sleepTime))
 		}
 	}
 }

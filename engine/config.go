@@ -24,7 +24,7 @@ const (
 
 var (
 	resource = &Resource{Cpu: 8, Memory: "16G"}
-	guard    = &Guard{Working: false}
+	guard    = &Guard{Working: true}
 )
 
 func watchGuard(store storage.Store) {

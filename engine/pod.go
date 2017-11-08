@@ -23,6 +23,8 @@ const (
 	DefaultHealthTimeout  = 5
 	DefaultHealthRetries  = 3
 
+	DefaultSetUpTime = 20
+
 	CPUQuota        = int64(1000000)
 	CPUMaxPctg      = 50 // max percentage of total cpu
 	CPUMaxLevel     = 8
@@ -431,8 +433,6 @@ func (pc *podController) createContainerConfig(filters []string, index int) adoc
 		}
 		if podSpec.HealthConfig.Options.Timeout > 0 {
 			timeout = podSpec.HealthConfig.Options.Timeout
-		} else if podSpec.GetSetupTime() > DefaultHealthTimeout {
-			timeout = podSpec.GetSetupTime()
 		}
 		if podSpec.HealthConfig.Options.Retries > 0 {
 			retries = podSpec.HealthConfig.Options.Retries

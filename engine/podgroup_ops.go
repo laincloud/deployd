@@ -151,9 +151,16 @@ func (op pgOperRefreshInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 	container := podCtrl.pod.Containers[0]
 	if runtime.State == RunStateSuccess {
 		if runtime.Healthst == HealthStateUnHealthy {
-			log.Warnf("PodGroupCtrl %s, we found pod unhealthy", op.spec)
-			ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name,
-				op.instanceNo, time.Now(), NotifyPodUnHealthy))
+			startAt := podCtrl.pod.Containers[0].Runtime.State.StartedAt
+			checkTime := podCtrl.spec.GetSetupTime()
+			if checkTime < DefaultSetUpTime {
+				checkTime = DefaultSetUpTime
+			}
+			if time.Now().After(startAt.Add(time.Second * time.Duration(checkTime) * 5)) {
+				log.Warnf("PodGroupCtrl %s, we found pod unhealthy", op.spec)
+				ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name,
+					op.instanceNo, time.Now(), NotifyPodUnHealthy))
+			}
 		}
 		if generics.Equal_StringSlice(evIds, podCtrl.pod.ContainerIds()) && op.spec.Version == evVersion {
 			pod := podCtrl.pod.Clone()
@@ -497,5 +504,18 @@ func (op pgOperSnapshotPrevState) Do(pgCtrl *podGroupController, c cluster.Clust
 		newState[i] = podCtrl.spec.PrevState.Clone()
 	}
 	pgCtrl.prevState = newState
+	return false
+}
+
+type pgOperSendState struct {
+	state string
+}
+
+func (op pgOperSendState) Do(pgCtrl *podGroupController, c cluster.Cluster, store storage.Store, ev *RuntimeEagleView) bool {
+	pgCtrl.Lock()
+	pgCtrl.group.LastError = op.state
+	pgCtrl.Unlock()
+
+	pgCtrl.opsChan <- pgOperSnapshotGroup{true}
 	return false
 }

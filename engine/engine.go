@@ -9,7 +9,6 @@ import (
 
 	"github.com/laincloud/deployd/cluster"
 	"github.com/laincloud/deployd/storage"
-	"github.com/laincloud/deployd/utils/util"
 	"github.com/mijia/adoc"
 	"github.com/mijia/sweb/log"
 )
@@ -170,6 +169,10 @@ func (engine *OrcEngine) InspectPodGroup(name string) (PodGroupWithSpec, bool) {
 	}
 }
 
+func (engine *OrcEngine) FetchPodStaHstry(name string, instance int) []*StatusMessage {
+	return FetchPodStaHstry(engine, name, instance)
+}
+
 func (engine *OrcEngine) RefreshPodGroup(name string, forceUpdate bool) error {
 	engine.RLock()
 	defer engine.RUnlock()
@@ -220,9 +223,41 @@ func (engine *OrcEngine) RescheduleSpec(name string, podSpec PodSpec) error {
 				log.Warnf("Engine found some missing dependency pod, %s", depends.PodName)
 			}
 		}
-		engine.opsChan <- orcOperRescheduleSpec{pgCtrl, podSpec}
+		if engine.hasEnoughResource(pgCtrl, podSpec) {
+			engine.opsChan <- orcOperRescheduleSpec{pgCtrl, podSpec}
+		} else {
+			pgCtrl.Lock()
+			pgCtrl.group.LastError = "No resources available to scheduler container"
+			pgCtrl.Unlock()
+			log.Info("No resources available to scheduler container")
+			pgCtrl.opsChan <- pgOperSaveStore{true}
+		}
+
 		return nil
 	}
+}
+
+func (engine *OrcEngine) hasEnoughResource(pgCtrl *podGroupController, podSpec PodSpec) bool {
+	if resources, err := engine.cluster.GetResources(); err != nil {
+		return false
+	} else {
+		podsLen := pgCtrl.spec.NumInstances
+		singleMemory := podSpec.Containers[0].MemoryLimit
+		availbleNums := 0
+		for _, resource := range resources {
+			nodeAvailMem := (resource.Memory - resource.UsedMemory)
+			for _, pod := range pgCtrl.group.Pods {
+				if pod.NodeName() == resource.Name {
+					nodeAvailMem += pgCtrl.spec.Pod.Containers[0].MemoryLimit
+				}
+			}
+			availbleNums += int(nodeAvailMem / singleMemory)
+			if availbleNums >= podsLen {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (engine *OrcEngine) Start() {
@@ -277,7 +312,7 @@ func (engine *OrcEngine) LoadDependsPods() error {
 	depCtrls := make(map[string]*dependsController)
 	specDirKey := strings.Join([]string{kLainDeploydRootKey, kLainDependencyKey, kLainSpecKey}, "/")
 	if specNames, err := engine.store.KeysByPrefix(specDirKey); err != nil {
-		if err != storage.ErrNoSuchKey {
+		if err != storage.KMissingError {
 			return err
 		}
 	} else {
@@ -291,7 +326,7 @@ func (engine *OrcEngine) LoadDependsPods() error {
 			var pods map[string]map[string]SharedPodWithSpec
 			podsKey := strings.Join([]string{kLainDeploydRootKey, kLainDependencyKey, kLainPodKey, spec.Name}, "/")
 			if err := engine.store.Get(podsKey, &pods); err != nil {
-				if err != storage.ErrNoSuchKey {
+				if err != storage.KMissingError {
 					log.Errorf("Failed to load dependency pods runtime %q from storage, %s", podsKey, err)
 					return err
 				} else {
@@ -311,14 +346,14 @@ func (engine *OrcEngine) LoadPodGroups() error {
 	pgCtrls := make(map[string]*podGroupController)
 	pgKey := fmt.Sprintf("%s/%s", kLainDeploydRootKey, kLainPodGroupKey)
 	if pgNamespaces, err := engine.store.KeysByPrefix(pgKey); err != nil {
-		if err != storage.ErrNoSuchKey {
+		if err != storage.KMissingError {
 			return err
 		}
 	} else {
 		for _, pgNamespace := range pgNamespaces {
 			pgNames, err := engine.store.KeysByPrefix(pgNamespace)
 			if err != nil {
-				if err != storage.ErrNoSuchKey {
+				if err != storage.KMissingError {
 					return err
 				}
 			}
@@ -520,6 +555,15 @@ func (engine *OrcEngine) startClusterMonitor() {
 	restart := make(chan bool)
 	downTime := time.Now()
 	downCount := 0
+	for {
+		successed := SyncDataFromStorage(engine)
+		if !successed {
+			time.Sleep(1 * time.Hour)
+		} else {
+			break
+		}
+	}
+	go MaintainEgineStatusHistory(engine) //
 	eventMonitorId := engine.cluster.MonitorEvents("", func(event adoc.Event, err error) {
 		if err != nil {
 			// log.Warnf("Error during the cluster event monitor, will try to restart the monitor, %s", err)
@@ -527,7 +571,7 @@ func (engine *OrcEngine) startClusterMonitor() {
 			restart <- true
 		} else {
 			engine.clusterRequestSucceed()
-			log.Debugf("Cluster event: %v", event)
+			// log.Debugf("Cluster event: %v", event)
 			if strings.HasPrefix(event.From, "swarm") {
 				switch event.Status {
 				case "engine_disconnect":
@@ -540,43 +584,23 @@ func (engine *OrcEngine) startClusterMonitor() {
 					}
 					engine.onClusterNodeLost(event.Node.Name, downCount)
 				}
-			} else if strings.HasPrefix(event.Status, "health_status") {
-				id := event.Id
-				if cont, err := engine.cluster.InspectContainer(id); err == nil {
-					status := HealthState(HealthStateNone)
-					switch event.Status {
-					case "health_status: starting":
-						status = HealthStateStarting
-					case "health_status: healthy":
-						status = HealthStateHealthy
-					case "health_status: unhealthy":
-						status = HealthStateUnHealthy
-					}
-					containerName := strings.TrimLeft(cont.Name, "/")
-					if podName, instance, err := util.ParseNameInstanceNo(containerName); err == nil {
-						pgCtrl, ok := engine.pgCtrls[podName]
-						if ok {
-							if len(pgCtrl.podCtrls) >= instance {
-								pgCtrl.podCtrls[instance-1].pod.Healthst = status
-								pgCtrl.opsChan <- pgOperSnapshotGroup{true}
-								pgCtrl.opsChan <- pgOperSaveStore{true}
-							}
-						}
-					}
-				} else {
-					log.Errorf("ParseNameInstanceNo error:%v", err)
-				}
+			} else {
+				HandleDockerEvent(engine, &event)
 			}
 		}
 	})
+	shouldRestart := false
 	select {
+	case <-engine.stop:
+		engine.cluster.StopMonitor(eventMonitorId)
 	case <-restart:
 		engine.cluster.StopMonitor(eventMonitorId)
 		close(restart)
 		time.Sleep(200 * time.Millisecond)
+		shouldRestart = true
+	}
+	if shouldRestart {
 		engine.startClusterMonitor()
-	case <-engine.stop:
-		engine.cluster.StopMonitor(eventMonitorId)
 	}
 }
 
