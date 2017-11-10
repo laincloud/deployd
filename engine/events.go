@@ -214,14 +214,20 @@ func (esh *engineStatusHistory) checkStatus(engine *OrcEngine) {
 	}
 }
 
+// egStatuses:map[]
+//	pgStatuses: map[]
+//    podStatusHistory:map[]
+//		DETAILDATA
 var (
 	egStatuses *engineStatusHistory
+	egLock     *sync.Mutex
 )
 
 func init() {
 	egStatuses = &engineStatusHistory{
 		pgStatuses: make(map[string]*PodGroupStatusHistory),
 	}
+	egLock = &sync.Mutex{}
 }
 
 func MaintainEgineStatusHistory(engine *OrcEngine) {
@@ -236,7 +242,8 @@ func MaintainEgineStatusHistory(engine *OrcEngine) {
 	}
 }
 
-// ugly finished should change with allKeysByPrefix(return all non-dir node)
+// Sync with etcd data when start deployd
+// ugly finished! should change with allKeysByPrefix(return all non-dir node)
 func SyncDataFromStorage(engine *OrcEngine) bool {
 	egStatuses.pgStatuses = make(map[string]*PodGroupStatusHistory)
 	store := engine.store
@@ -326,6 +333,8 @@ func savePodStaHstry(engine *OrcEngine, event *adoc.Event) {
 				Action: event.Action,
 			}
 			nextPos := 0
+			egLock.Lock()
+			defer egLock.Unlock()
 			if pgStatus, ok := egStatuses.pgStatuses[podname]; ok {
 				if podStatus, ok := pgStatus.podStatuses[instance]; ok {
 					nextPos = (podStatus.pos.Pos + 1) % podStatus.pos.Size

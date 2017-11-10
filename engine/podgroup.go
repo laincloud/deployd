@@ -433,6 +433,9 @@ func (pgCtrl *podGroupController) waitLastPodHealthy(i int, podSpec PodSpec) {
 			}
 		}
 	}
+	// if i == 1 && retryTimes == retries {
+	// 	//rollback
+	// }
 	if pgCtrl.podCtrls[i].pod.Healthst != HealthStateNone {
 		pgCtrl.podCtrls[i].pod.Healthst = HealthStateStarting
 	}
