@@ -229,6 +229,24 @@ func (pgCtrl *podGroupController) Refresh(force bool) {
 	pgCtrl.opsChan <- pgOperLogOperation{"PodGroup refreshing finished"}
 }
 
+func (pgCtrl *podGroupController) ChageState(op string, instance int) {
+	pgCtrl.RLock()
+	spec := pgCtrl.spec.Clone()
+	pgCtrl.RUnlock()
+	if instance == 0 {
+		for i := 0; i < spec.NumInstances; i += 1 {
+			if op == "restart" {
+				pgCtrl.waitLastPodHealthy(i, spec.Pod)
+			}
+			pgCtrl.opsChan <- pgOperChageState{op, i + 1}
+		}
+	} else if instance > 0 && instance <= spec.NumInstances {
+		pgCtrl.opsChan <- pgOperChageState{op, instance}
+	}
+	pgCtrl.opsChan <- pgOperSnapshotGroup{true}
+	pgCtrl.opsChan <- pgOperSaveStore{true}
+}
+
 func (pgCtrl *podGroupController) Activate(c cluster.Cluster, store storage.Store, eagle *RuntimeEagleView, stop chan struct{}) {
 	go func() {
 		for {
@@ -391,33 +409,32 @@ func (pgCtrl *podGroupController) updatePodPorts(podSpec PodSpec) bool {
 }
 
 func (pgCtrl *podGroupController) waitLastPodHealthy(i int, podSpec PodSpec) {
+	if i > 0 {
+		retries := 5
+		sleepTime := DefaultSetUpTime
+		if podSpec.GetSetupTime() > DefaultSetUpTime {
+			sleepTime = podSpec.GetSetupTime()
+		}
+		// wait some seconds for new instance's initialization completed, before we update next one
+		if pgCtrl.podCtrls[i].pod.Healthst == HealthStateNone {
+			time.Sleep(time.Second * time.Duration(podSpec.GetSetupTime()))
+		} else {
+			retryTimes := 0
+			for {
+				if retryTimes == retries {
+					break
+				}
+				retryTimes++
+				// wait until to healthy state
+				if pgCtrl.podCtrls[i-1].pod.Healthst == HealthStateHealthy {
+					break
+				}
+				time.Sleep(time.Second * time.Duration(sleepTime))
+			}
+		}
+	}
 	if pgCtrl.podCtrls[i].pod.Healthst != HealthStateNone {
 		pgCtrl.podCtrls[i].pod.Healthst = HealthStateStarting
-	}
-	if i <= 0 {
-		return
-	}
-	retries := 5
-	sleepTime := DefaultSetUpTime
-	if podSpec.GetSetupTime() > DefaultSetUpTime {
-		sleepTime = podSpec.GetSetupTime()
-	}
-	// wait some seconds for new instance's initialization completed, before we update next one
-	if pgCtrl.podCtrls[i].pod.Healthst == HealthStateNone {
-		time.Sleep(time.Second * time.Duration(podSpec.GetSetupTime()))
-	} else {
-		retryTimes := 0
-		for {
-			if retryTimes == retries {
-				break
-			}
-			retryTimes++
-			// wait until to healthy state
-			if pgCtrl.podCtrls[i-1].pod.Healthst == HealthStateHealthy {
-				break
-			}
-			time.Sleep(time.Second * time.Duration(sleepTime))
-		}
 	}
 }
 

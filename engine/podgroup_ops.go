@@ -519,3 +519,39 @@ func (op pgOperSendState) Do(pgCtrl *podGroupController, c cluster.Cluster, stor
 	pgCtrl.opsChan <- pgOperSnapshotGroup{true}
 	return false
 }
+
+type pgOperChageState struct {
+	op       string
+	instance int
+}
+
+func (op pgOperChageState) Do(pgCtrl *podGroupController, c cluster.Cluster, store storage.Store, ev *RuntimeEagleView) bool {
+	start := time.Now()
+	defer func() {
+		pgCtrl.RLock()
+		log.Infof("%s change instance state, op=%+v,  duration=%s", pgCtrl, op, time.Now().Sub(start))
+		pgCtrl.RUnlock()
+	}()
+	podCtrl := pgCtrl.podCtrls[op.instance-1]
+	switch op.op {
+	case "start":
+		podCtrl.Start(c)
+		if podCtrl.pod.State != RunStateFail {
+			podCtrl.pod.ChangeTargetState(ExpectStateRun)
+		}
+	case "stop":
+		podCtrl.Stop(c)
+		if podCtrl.pod.State != RunStateFail {
+			log.Infof("ExpectStateStop:%v", ExpectStateStop)
+			podCtrl.pod.ChangeTargetState(ExpectStateStop)
+			log.Infof("podCtrl.pod.TargetState:%v", podCtrl.pod.TargetState)
+		}
+	case "restart":
+		podCtrl.Restart(c)
+		if podCtrl.pod.State != RunStateFail {
+			podCtrl.pod.ChangeTargetState(ExpectStateRun)
+		}
+	}
+	log.Infof("podCtrl.pod:%v,podCtrl.pod.State:%v, target_state:%v", podCtrl.pod, podCtrl.pod.State, podCtrl.pod.TargetState)
+	return false
+}

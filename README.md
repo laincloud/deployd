@@ -155,6 +155,19 @@ PATCH /api/podgroups?name={string}&cmd=spec
 #     BadRequest: 缺少必需的参数
 #     NotAllowed: 集群缺少相关资源可被调度
 #     NotFound: 没有找到对应名称的PodGroup
+
+PATCH /api/podgroups?name={string}&cmd=operation&optype={stop/restart}[&instance={int}]
+# 更改PodGroup运行时的具体Spec配置信息
+# 参数：
+#     name: PodGroup名称
+#     optype: 操作类型 停止或重启
+#     instance: 操作的pg instance，不传时为整个pod group
+# 返回：
+#     Accepted: 任务被接受
+# 错误信息：
+#     BadRequest: 缺少必需的参数
+#     NotAllowed: 集群缺少相关资源可被调度
+#     NotFound: 没有找到对应名称的PodGroup
 ```
 
 ### Dependency Api

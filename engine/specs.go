@@ -134,6 +134,27 @@ func (hc HealthConfig) Equals(cp HealthConfig) bool {
 		hc.Options.Equals(cp.Options)
 }
 
+func (hc HealthConfig) FetchOption() HealthCnfOptions {
+	interval := DefaultHealthInterval
+	timeout := DefaultHealthTimeout
+	retries := DefaultHealthRetries
+	options := hc.Options
+	if options.Interval > interval {
+		interval = options.Interval
+	}
+	if options.Timeout > timeout {
+		timeout = options.Timeout
+	}
+	if options.Retries > retries {
+		retries = options.Retries
+	}
+	return HealthCnfOptions{
+		Interval: interval,
+		Timeout:  timeout,
+		Retries:  retries,
+	}
+}
+
 type ContainerSpec struct {
 	ImSpec
 	Image         string

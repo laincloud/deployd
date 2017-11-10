@@ -543,6 +543,12 @@ func (engine *OrcEngine) DeleteNotify(callback string) error {
 	}
 }
 
+func (engine *OrcEngine) ChageState(pgName, op string, instance int) {
+	if pgCtrl, ok := engine.pgCtrls[pgName]; ok {
+		engine.opsChan <- orcOperChangeState{pgCtrl, op, instance}
+	}
+}
+
 func (engine *OrcEngine) onClusterNodeLost(nodeName string, downCount int) {
 	log.Warnf("Cluster node is down, [%q], %s nodes down in all, will check if need stop the engine", nodeName, downCount)
 	if downCount >= maxDownNode {

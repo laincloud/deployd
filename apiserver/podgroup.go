@@ -92,7 +92,7 @@ func (rpg RestfulPodGroups) Patch(ctx context.Context, r *http.Request) (int, in
 	}
 
 	orcEngine := getEngine(ctx)
-	options := []string{"replica", "spec"}
+	options := []string{"replica", "spec", "operation"}
 	cmd := form.ParamStringOptions(r, "cmd", options, "noop")
 	var err error
 	switch cmd {
@@ -125,6 +125,11 @@ func (rpg RestfulPodGroups) Patch(ctx context.Context, r *http.Request) (int, in
 			return http.StatusBadRequest, fmt.Sprintf("Missing parameter for PodSpec")
 		}
 		err = orcEngine.RescheduleSpec(pgName, podSpec)
+	case "operation":
+		instance := form.ParamInt(r, "instance", 0)
+		opTypeOptions := []string{"start", "stop", "restart"}
+		opType := form.ParamStringOptions(r, "optype", opTypeOptions, "noop")
+		orcEngine.ChageState(pgName, opType, instance)
 	}
 
 	if err != nil {

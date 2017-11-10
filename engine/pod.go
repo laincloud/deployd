@@ -183,9 +183,7 @@ func (pc *podController) Stop(cluster cluster.Cluster) {
 	defer func() {
 		log.Infof("%s stopped, state=%+v, duration=%s", pc, pc.pod.ImRuntime, time.Now().Sub(start))
 	}()
-
 	pc.pod.LastError = ""
-
 	for i, container := range pc.pod.Containers {
 		if err := cluster.StopContainer(container.Id, pc.spec.GetKillTimeout()); err != nil {
 			log.Warnf("%s Cannot stop the container %s, %s", pc, container.Id, err)
@@ -214,6 +212,29 @@ func (pc *podController) Start(cluster cluster.Cluster) {
 	for i, container := range pc.pod.Containers {
 		if err := cluster.StartContainer(container.Id); err != nil {
 			log.Warnf("%s Cannot start the container %s, %s", pc, container.Id, err)
+			if !util.IsConnectionError(err) {
+				pc.pod.State = RunStateFail
+			}
+			pc.pod.LastError = fmt.Sprintf("Cannot start container, %s", err)
+		} else {
+			pc.refreshContainer(cluster, i)
+		}
+	}
+	pc.UpdateRestartInfo()
+	pc.pod.UpdatedAt = time.Now()
+}
+
+func (pc *podController) Restart(cluster cluster.Cluster) {
+	log.Infof("%s restarting", pc)
+	start := time.Now()
+	defer func() {
+		log.Infof("%s restarted, state=%+v, duration=%s", pc, pc.pod.ImRuntime, time.Now().Sub(start))
+	}()
+	pc.pod.State = RunStateSuccess
+	pc.pod.LastError = ""
+	for i, container := range pc.pod.Containers {
+		if err := cluster.RestartContainer(container.Id, pc.spec.GetKillTimeout()); err != nil {
+			log.Warnf("%s Cannot restart the container %s, %s", pc, container.Id, err)
 			if !util.IsConnectionError(err) {
 				pc.pod.State = RunStateFail
 			}
@@ -332,7 +353,7 @@ func (pc *podController) refreshContainer(kluster cluster.Cluster, index int) {
 		state := info.State
 		pc.pod.OOMkilled = state.OOMKilled
 		if !state.Running {
-			if state.ExitCode == 0 {
+			if state.ExitCode == 2 {
 				pc.pod.State = RunStateExit
 			} else {
 				pc.pod.State = RunStateFail
@@ -340,7 +361,10 @@ func (pc *podController) refreshContainer(kluster cluster.Cluster, index int) {
 			}
 		}
 		health := state.Health
-		if health != nil {
+		options := pc.spec.HealthConfig.FetchOption()
+		checkedPoint := (options.Interval + options.Timeout) * options.Retries
+		if health != nil && time.Now().After(state.StartedAt.Add(
+			time.Second*time.Duration(checkedPoint))) {
 			if health.Status == HealthState(HealthStateStarting).String() {
 				pc.pod.Healthst = HealthState(HealthStateStarting)
 			} else if health.Status == HealthState(HealthStateHealthy).String() {
@@ -424,19 +448,8 @@ func (pc *podController) createContainerConfig(filters []string, index int) adoc
 			Test: []string{"NONE"},
 		}
 	} else {
-		interval := DefaultHealthInterval
-		timeout := DefaultHealthTimeout
-		retries := DefaultHealthRetries
+		options := podSpec.HealthConfig.FetchOption()
 		cmd := podSpec.HealthConfig.Cmd
-		if podSpec.HealthConfig.Options.Interval > 0 {
-			interval = podSpec.HealthConfig.Options.Interval
-		}
-		if podSpec.HealthConfig.Options.Timeout > 0 {
-			timeout = podSpec.HealthConfig.Options.Timeout
-		}
-		if podSpec.HealthConfig.Options.Retries > 0 {
-			retries = podSpec.HealthConfig.Options.Retries
-		}
 		if cmd == "" {
 			var annotions map[string]interface{}
 			if err := json.Unmarshal([]byte(podSpec.Annotation), &annotions); err == nil {
@@ -456,10 +469,10 @@ func (pc *podController) createContainerConfig(filters []string, index int) adoc
 		}
 		if cmd != "" {
 			cc.Healthcheck = &adoc.HealthConfig{
-				Test:     []string{"CMD-SHELL", "timeout " + strconv.Itoa(timeout) + " " + cmd + " || exit 1"},
-				Interval: time.Duration(interval) * time.Second,
-				Timeout:  time.Duration(timeout) * time.Second,
-				Retries:  retries,
+				Test:     []string{"CMD-SHELL", "timeout " + strconv.Itoa(options.Timeout) + " " + cmd + " || exit 1"},
+				Interval: time.Duration(options.Interval) * time.Second,
+				Timeout:  time.Duration(options.Timeout) * time.Second,
+				Retries:  options.Retries,
 			}
 		}
 	}
