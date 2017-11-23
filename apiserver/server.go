@@ -48,11 +48,14 @@ func (s *Server) ListenAndServe(addr string) error {
 		s.runtime = server.NewRuntimeWare(ignoredUrls, true, 15*time.Minute).(*server.RuntimeWare)
 	}
 	s.Middleware(s.runtime)
+	s.Middleware(NewReadOnlySwitch())
 
 	s.RestfulHandlerAdapter(s.adaptResourceHandler)
 	s.AddRestfulResource("/api/podgroups", "RestfulPodGroups", RestfulPodGroups{})
 	s.AddRestfulResource("/api/depends", "RestfulDependPods", RestfulDependPods{})
 	s.AddRestfulResource("/api/nodes", "RestfulNodes", RestfulNodes{})
+	s.AddRestfulResource("/api/engine/config", "EngineConfig", EngineConfigApi{})
+	s.AddRestfulResource("/api/engine/maintenance", "EngineMaintenance", EngineMaintenanceApi{})
 	s.AddRestfulResource("/api/status", "RestfulStatus", RestfulStatus{})
 	s.AddRestfulResource("/api/constraints", "RestfulConstraints", RestfulConstraints{})
 	s.AddRestfulResource("/api/notifies", "RestfulNotifies", RestfulNotifies{})

@@ -34,9 +34,36 @@ const (
 	ClusterFailedThreadSold = 20
 )
 
+type EngineConfig struct {
+	ReadOnly    bool `json:"readonly"`
+	Maintenance bool `json:"maintenance"`
+}
+
+func (engine *OrcEngine) ReadOnly() bool {
+	return engine.config.ReadOnly || engine.config.Maintenance
+}
+
+func (engine *OrcEngine) Config() EngineConfig {
+	return engine.config
+}
+
+func (engine *OrcEngine) Maintaince(maintaince bool) {
+	engine.RLock()
+	defer engine.RUnlock()
+	engine.config.Maintenance = maintaince
+}
+
+func (engine *OrcEngine) SetConfig(config EngineConfig) {
+	engine.RLock()
+	defer engine.RUnlock()
+	engine.config = config
+	ConfigEngine(engine)
+}
+
 type OrcEngine struct {
 	sync.RWMutex
 
+	config       EngineConfig
 	cluster      cluster.Cluster
 	store        storage.Store
 	eagleView    *RuntimeEagleView
@@ -380,7 +407,7 @@ func (engine *OrcEngine) initDependsCtrl(spec PodSpec, pods map[string]map[strin
 }
 
 func (engine *OrcEngine) initPodGroupCtrl(spec PodGroupSpec, states []PodPrevState, pg PodGroup) *podGroupController {
-	pgCtrl := newPodGroupController(spec, states, pg)
+	pgCtrl := newPodGroupController(spec, states, pg, engine)
 	pgCtrl.AddListener(engine)
 	pgCtrl.Activate(engine.cluster, engine.store, engine.eagleView, engine.stop)
 	return pgCtrl
@@ -562,14 +589,14 @@ func (engine *OrcEngine) startClusterMonitor() {
 	downTime := time.Now()
 	downCount := 0
 	for {
-		successed := SyncDataFromStorage(engine)
+		successed := SyncEventsDataFromStorage(engine)
 		if !successed {
 			time.Sleep(1 * time.Hour)
 		} else {
 			break
 		}
 	}
-	go MaintainEgineStatusHistory(engine) //
+	MaintainEngineStatusHistory(engine) //
 	eventMonitorId := engine.cluster.MonitorEvents("", func(event adoc.Event, err error) {
 		if err != nil {
 			// log.Warnf("Error during the cluster event monitor, will try to restart the monitor, %s", err)
@@ -613,6 +640,7 @@ func (engine *OrcEngine) startClusterMonitor() {
 func New(cluster cluster.Cluster, store storage.Store) (*OrcEngine, error) {
 	engine := &OrcEngine{
 		cluster:      cluster,
+		config:       EngineConfig{ReadOnly: false},
 		store:        store,
 		pgCtrls:      make(map[string]*podGroupController),
 		rmPgCtrls:    make(map[string]*podGroupController),
@@ -623,6 +651,7 @@ func New(cluster cluster.Cluster, store storage.Store) (*OrcEngine, error) {
 		clstrFailCnt: 0,
 	}
 	watchResource(store)
+	WatchEngineConfig(engine)
 
 	eagleView := NewRuntimeEagleView()
 	//if err := eagleView.Refresh(cluster); err != nil {

@@ -220,7 +220,7 @@ func (op pgOperRefreshInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 		runtime = podCtrl.pod.ImRuntime
 		return false
 	}
-	if podCtrl.pod.NeedRestart(op.spec.RestartPolicy) {
+	if !pgCtrl.engine.config.Maintenance && podCtrl.pod.NeedRestart(op.spec.RestartPolicy) {
 		if podCtrl.pod.RestartEnoughTimes() {
 			ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name,
 				op.instanceNo, container.Runtime.State.FinishedAt, NotifyLetPodGo))

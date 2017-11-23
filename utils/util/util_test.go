@@ -1,6 +1,7 @@
 package util
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -34,4 +35,17 @@ func Test_timeFormat(t *testing.T) {
 	fmt.Println(time.Now().Format("Jan  2 15:04:05"))
 	// Jan  1 00:00:00
 	// time.Now().Format("2006-01-02 15:04:05")
+}
+
+type Test struct {
+	Time time.Time
+}
+
+func Test_timeMarshal(t *testing.T) {
+	fmt.Println(time.Now().Format("Jan  2 15:04:05"))
+	// Jan  1 00:00:00
+	// time.Now().Format("2006-01-02 15:04:05")
+	tt := &Test{Time: time.Now()}
+	data, _ := json.Marshal(tt)
+	fmt.Println("t:", string(data))
 }

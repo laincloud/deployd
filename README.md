@@ -97,6 +97,69 @@ go build -o deployd
 
 Deployd的内部编排引擎OrcEngine为异步执行模型，所以，基本上调度API返回的结果只是预约结果，而非真实操作的最后结果，可以继续通过相关GET Api来获取实际的运行信息，任务接受后，会进入OrcEngine的异步执行队列中。
 
+### Engine Api
+
+```
+GET /api/engine/config
+# 获取engine 配置信息
+# 返回：
+#     OK: EngineConfig JSON 数据
+
+PATCH /api/engine/config
+# 修改engine配置信息
+# 参数：
+#     Body: EngineConfig的JSON数据
+# 返回：
+#     OK: EngineConfig JSON 数据
+# 错误信息：
+#     BadRequest: PodGroupSpec JSON格式错误，或者缺少必需的参数
+
+PATCH /api/engine/maintenance&on=false
+# 删除PodGroup部署
+# 参数：
+#     on: 是否打开维护模式
+# 返回：
+#     OK: EngineConfig JSON 数据
+
+PATCH /api/podgroups?name={string}&cmd=replica&num_instances={int}&restart_policy={string}
+# 更改PodGroup运行时的Instance数量以及重启策略
+# 参数：
+#     name: PodGroup名称
+#     num_instances: 需要的实例数量
+#     restart_policy(optional): 重启策略，值包括：never, always, onfail
+# 返回：
+#     Accepted: 任务被接受
+# 错误信息：
+#     BadRequest: 缺少必需的参数
+#     NotAllowed: 集群缺少相关资源可被调度
+#     NotFound: 没有找到对应名称的PodGroup
+
+PATCH /api/podgroups?name={string}&cmd=spec
+# 更改PodGroup运行时的具体Spec配置信息
+# 参数：
+#     name: PodGroup名称
+#     Body: 新的PodSpec
+# 返回：
+#     Accepted: 任务被接受
+# 错误信息：
+#     BadRequest: 缺少必需的参数
+#     NotAllowed: 集群缺少相关资源可被调度
+#     NotFound: 没有找到对应名称的PodGroup
+
+PATCH /api/podgroups?name={string}&cmd=operation&optype={start/stop/restart}[&instance={int}]
+# 更改PodGroup运行时的具体Spec配置信息
+# 参数：
+#     name: PodGroup名称
+#     optype: 操作类型 停止或重启
+#     instance: 操作的pg instance，不传时为整个pod group
+# 返回：
+#     Accepted: 任务被接受
+# 错误信息：
+#     BadRequest: 缺少必需的参数
+#     NotAllowed: 集群缺少相关资源可被调度
+#     NotFound: 没有找到对应名称的PodGroup
+```
+
 ### PodGroup Api
 
 ```
@@ -156,7 +219,7 @@ PATCH /api/podgroups?name={string}&cmd=spec
 #     NotAllowed: 集群缺少相关资源可被调度
 #     NotFound: 没有找到对应名称的PodGroup
 
-PATCH /api/podgroups?name={string}&cmd=operation&optype={stop/restart}[&instance={int}]
+PATCH /api/podgroups?name={string}&cmd=operation&optype={start/stop/restart}[&instance={int}]
 # 更改PodGroup运行时的具体Spec配置信息
 # 参数：
 #     name: PodGroup名称

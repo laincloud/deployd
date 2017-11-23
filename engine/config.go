@@ -17,9 +17,10 @@ type Guard struct {
 }
 
 const (
-	EtcdResourcesKey = "/lain/config/resources"
-
+	EtcdResourcesKey   = "/lain/config/resources"
 	EtcdGuardSwitchKey = "/lain/config/guardswitch"
+
+	EtcdReadOnlyKey = "/lain/deployd/engine/config"
 )
 
 var (
@@ -33,6 +34,10 @@ func watchGuard(store storage.Store) {
 
 func watchResource(store storage.Store) {
 	watcher(store, EtcdResourcesKey, resource)
+}
+
+func WatchEngineConfig(engine *OrcEngine) {
+	watcher(engine.store, EtcdReadOnlyKey, engine.config)
 }
 
 func watcher(store storage.Store, key string, v interface{}) {
@@ -76,5 +81,12 @@ func GuardGotoWork(store storage.Store) bool {
 		return false
 	}
 	guard = g
+	return true
+}
+
+func ConfigEngine(engine *OrcEngine) bool {
+	if err := engine.store.Set(EtcdReadOnlyKey, engine.config, true); err != nil {
+		return false
+	}
 	return true
 }

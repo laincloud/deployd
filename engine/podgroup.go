@@ -21,6 +21,8 @@ type PodGroupWithSpec struct {
 type podGroupController struct {
 	Publisher
 
+	engine *OrcEngine
+
 	sync.RWMutex
 	spec      PodGroupSpec
 	prevState []PodPrevState
@@ -447,7 +449,7 @@ func (pgCtrl *podGroupController) emptyError() {
 	pgCtrl.group.LastError = ""
 }
 
-func newPodGroupController(spec PodGroupSpec, states []PodPrevState, pg PodGroup) *podGroupController {
+func newPodGroupController(spec PodGroupSpec, states []PodPrevState, pg PodGroup, engine *OrcEngine) *podGroupController {
 	podCtrls := make([]*podController, spec.NumInstances)
 	for i := range podCtrls {
 		var pod Pod
@@ -474,6 +476,7 @@ func newPodGroupController(spec PodGroupSpec, states []PodPrevState, pg PodGroup
 	}
 
 	pgCtrl := &podGroupController{
+		engine:   engine,
 		spec:     spec,
 		group:    pg,
 		podCtrls: podCtrls,

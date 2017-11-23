@@ -230,7 +230,7 @@ func init() {
 	egLock = &sync.Mutex{}
 }
 
-func MaintainEgineStatusHistory(engine *OrcEngine) {
+func MaintainEngineStatusHistory(engine *OrcEngine) {
 	tick := time.Tick(1 * time.Hour)
 	for {
 		select {
@@ -244,7 +244,7 @@ func MaintainEgineStatusHistory(engine *OrcEngine) {
 
 // Sync with etcd data when start deployd
 // ugly finished! should change with allKeysByPrefix(return all non-dir node)
-func SyncDataFromStorage(engine *OrcEngine) bool {
+func SyncEventsDataFromStorage(engine *OrcEngine) bool {
 	egStatuses.pgStatuses = make(map[string]*PodGroupStatusHistory)
 	store := engine.store
 	podgroups, err := store.KeysByPrefix(KCntStatus)
