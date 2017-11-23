@@ -596,7 +596,7 @@ func (engine *OrcEngine) startClusterMonitor() {
 			break
 		}
 	}
-	MaintainEngineStatusHistory(engine) //
+	go MaintainEngineStatusHistory(engine) //
 	eventMonitorId := engine.cluster.MonitorEvents("", func(event adoc.Event, err error) {
 		if err != nil {
 			// log.Warnf("Error during the cluster event monitor, will try to restart the monitor, %s", err)

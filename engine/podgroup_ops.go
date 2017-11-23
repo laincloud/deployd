@@ -136,6 +136,8 @@ func (op pgOperRefreshInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 	podCtrl.Refresh(c)
 	runtime = podCtrl.pod.ImRuntime
 
+	// eagleview ids
+	// in case of pod created failed
 	evIds := make([]string, len(podCtrl.spec.Containers))
 	evVersion := -1
 	for _, podContainer := range pgCtrl.evSnapshot {
@@ -148,6 +150,7 @@ func (op pgOperRefreshInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 			}
 		}
 	}
+
 	container := podCtrl.pod.Containers[0]
 	if runtime.State == RunStateSuccess {
 		if runtime.Healthst == HealthStateUnHealthy {
