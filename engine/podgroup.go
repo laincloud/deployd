@@ -164,7 +164,6 @@ func (pgCtrl *podGroupController) RescheduleSpec(podSpec PodSpec) {
 	pgCtrl.opsChan <- pgOperSaveStore{true}
 	pgCtrl.opsChan <- pgOperSnapshotEagleView{spec.Name}
 	for i := 0; i < spec.NumInstances; i += 1 {
-		pgCtrl.waitLastPodHealthy(i, podSpec)
 		pgCtrl.opsChan <- pgOperUpgradeInstance{i + 1, spec.Version, oldPodSpec, spec.Pod}
 		pgCtrl.opsChan <- pgOperSnapshotGroup{true}
 		pgCtrl.opsChan <- pgOperSaveStore{true}
@@ -185,7 +184,6 @@ func (pgCtrl *podGroupController) RescheduleDrift(fromNode, toNode string, insta
 	pgCtrl.opsChan <- pgOperLogOperation{fmt.Sprintf("Start to reschedule drift from %s", fromNode)}
 	if instanceNo == -1 {
 		for i := 0; i < spec.NumInstances; i += 1 {
-			pgCtrl.waitLastPodHealthy(i, spec.Pod)
 			pgCtrl.opsChan <- pgOperDriftInstance{i + 1, fromNode, toNode, force}
 		}
 	} else {
@@ -237,9 +235,6 @@ func (pgCtrl *podGroupController) ChageState(op string, instance int) {
 	pgCtrl.RUnlock()
 	if instance == 0 {
 		for i := 0; i < spec.NumInstances; i += 1 {
-			if op == "restart" {
-				pgCtrl.waitLastPodHealthy(i, spec.Pod)
-			}
 			pgCtrl.opsChan <- pgOperChageState{op, i + 1}
 		}
 	} else if instance > 0 && instance <= spec.NumInstances {
@@ -410,10 +405,11 @@ func (pgCtrl *podGroupController) updatePodPorts(podSpec PodSpec) bool {
 	return true
 }
 
-func (pgCtrl *podGroupController) waitLastPodHealthy(i int, podSpec PodSpec) {
+func (pgCtrl *podGroupController) waitLastPodHealthy(i int) {
 	if i > 0 {
 		retries := 5
 		sleepTime := DefaultSetUpTime
+		podSpec := pgCtrl.spec.Pod
 		if podSpec.GetSetupTime() > DefaultSetUpTime {
 			sleepTime = podSpec.GetSetupTime()
 		}

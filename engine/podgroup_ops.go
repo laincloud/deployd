@@ -100,6 +100,8 @@ func (op pgOperUpgradeInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 	newPodSpec.PrevState = podCtrl.spec.PrevState.Clone() // upgrade action, state should not changed
 	prevNodeName := newPodSpec.PrevState.NodeName
 
+	pgCtrl.waitLastPodHealthy(op.instanceNo - 1)
+
 	var lowOp pgOperation
 	lowOp = pgOperRemoveInstance{op.instanceNo, op.oldPodSpec}
 	lowOp.Do(pgCtrl, c, store, ev)
@@ -399,6 +401,8 @@ func (op pgOperDriftInstance) Do(pgCtrl *podGroupController, c cluster.Cluster, 
 	oldSpec, oldPod := podCtrl.spec.Clone(), podCtrl.pod
 	oldNodeName := oldPod.NodeName()
 
+	pgCtrl.waitLastPodHealthy(op.instanceNo - 1)
+
 	isDrifted = podCtrl.Drift(c, op.fromNode, op.toNode, op.force)
 	runtime = podCtrl.pod.ImRuntime
 	if isDrifted {
@@ -550,6 +554,7 @@ func (op pgOperChageState) Do(pgCtrl *podGroupController, c cluster.Cluster, sto
 			log.Infof("podCtrl.pod.TargetState:%v", podCtrl.pod.TargetState)
 		}
 	case "restart":
+		pgCtrl.waitLastPodHealthy(op.instance - 1)
 		podCtrl.Restart(c)
 		if podCtrl.pod.State != RunStateFail {
 			podCtrl.pod.ChangeTargetState(ExpectStateRun)
