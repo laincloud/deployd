@@ -114,7 +114,7 @@ func TestEnginePodGroup(t *testing.T) {
 	podSpec := createPodSpec(namespace, name)
 	podSpec.Containers[0].MemoryLimit = 24 * 1024 * 1024
 	engine.RescheduleSpec(name, podSpec)
-	time.Sleep(20 * time.Second)
+	time.Sleep(40 * time.Second)
 	if pg, ok := engine.InspectPodGroup(name); !ok {
 		t.Errorf("We should have the pod group, but we don't get it")
 	} else if pg.Spec.Version != 2 {

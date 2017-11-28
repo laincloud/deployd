@@ -563,3 +563,12 @@ func (op pgOperChageState) Do(pgCtrl *podGroupController, c cluster.Cluster, sto
 	log.Infof("podCtrl.pod:%v,podCtrl.pod.State:%v, target_state:%v", podCtrl.pod, podCtrl.pod.State, podCtrl.pod.TargetState)
 	return false
 }
+
+// Mark podgroup operated over
+type pgOperOver struct {
+}
+
+func (op pgOperOver) Do(pgCtrl *podGroupController, c cluster.Cluster, store storage.Store, ev *RuntimeEagleView) bool {
+	pgCtrl.OperateOver()
+	return false
+}

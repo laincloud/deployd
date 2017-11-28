@@ -211,12 +211,22 @@ func (engine *OrcEngine) RefreshPodGroup(name string, forceUpdate bool) error {
 	}
 }
 
+func canOperation(pgCtrl *podGroupController, target PGOpState) error {
+	if opState := pgCtrl.CanOperate(target); opState != PGOpStateIdle {
+		return OperLockedError{info: opState.String()}
+	}
+	return nil
+}
+
 func (engine *OrcEngine) RemovePodGroup(name string) error {
 	engine.Lock()
 	defer engine.Unlock()
 	if pgCtrl, ok := engine.pgCtrls[name]; !ok {
 		return ErrPodGroupNotExists
 	} else {
+		if err := canOperation(pgCtrl, PGOpStateRemoving); err != nil {
+			return err
+		}
 		log.Infof("start delete %v\n", name)
 		engine.opsChan <- orcOperRemove{pgCtrl}
 		delete(engine.pgCtrls, name)
@@ -232,6 +242,9 @@ func (engine *OrcEngine) RescheduleInstance(name string, numInstances int, resta
 	if pgCtrl, ok := engine.pgCtrls[name]; !ok {
 		return ErrPodGroupNotExists
 	} else {
+		if err := canOperation(pgCtrl, PGOpStateScheduling); err != nil {
+			return err
+		}
 		engine.opsChan <- orcOperRescheduleInstance{pgCtrl, numInstances, restartPolicy}
 		return nil
 	}
@@ -243,6 +256,9 @@ func (engine *OrcEngine) RescheduleSpec(name string, podSpec PodSpec) error {
 	if pgCtrl, ok := engine.pgCtrls[name]; !ok {
 		return ErrPodGroupNotExists
 	} else {
+		if err := canOperation(pgCtrl, PGOpStateScheduling); err != nil {
+			return err
+		}
 		for _, depends := range podSpec.Dependencies {
 			if _, ok := engine.dependsCtrls[depends.PodName]; !ok {
 				// We will allow the weak reference to the dependency pods and won't return an error
@@ -262,6 +278,46 @@ func (engine *OrcEngine) RescheduleSpec(name string, podSpec PodSpec) error {
 
 		return nil
 	}
+}
+
+func (engine *OrcEngine) DriftNode(fromNode, toNode string, pgName string, pgInstance int, force bool) {
+	engine.RLock()
+	defer engine.RUnlock()
+	if pgName == "" {
+		for _, pgCtrl := range engine.pgCtrls {
+			_pgCtrl := pgCtrl
+			engine.opsChan <- orcOperScheduleDrift{_pgCtrl, fromNode, toNode, pgInstance, force}
+		}
+	} else {
+		if pgCtrl, ok := engine.pgCtrls[pgName]; ok {
+			engine.opsChan <- orcOperScheduleDrift{pgCtrl, fromNode, toNode, pgInstance, force}
+		}
+	}
+	// FIXME: do we need to tell dependsCtrl to drift?
+	// so far we just wait for the dependsCtrl to react to the events
+}
+
+func (engine *OrcEngine) ChageState(pgName, op string, instance int) error {
+	engine.RLock()
+	defer engine.RUnlock()
+	if pgCtrl, ok := engine.pgCtrls[pgName]; ok {
+		targetState := PGOpStateIdle
+		switch op {
+		case "stop":
+			targetState = PGOpStateStoping
+		case "start":
+			targetState = PGOpStateStarting
+		case "restart":
+			targetState = PGOpStateRestarting
+		}
+		if err := canOperation(pgCtrl, (PGOpState)(targetState)); err != nil {
+			return err
+		}
+		engine.opsChan <- orcOperChangeState{pgCtrl, op, instance}
+	} else {
+		return ErrPodGroupNotExists
+	}
+	return nil
 }
 
 func (engine *OrcEngine) hasEnoughResource(pgCtrl *podGroupController, podSpec PodSpec) bool {
@@ -520,23 +576,6 @@ func (engine *OrcEngine) checkPodGroupRemoveResult(name string, pgCtrl *podGroup
 	}
 }
 
-func (engine *OrcEngine) DriftNode(fromNode, toNode string, pgName string, pgInstance int, force bool) {
-	engine.RLock()
-	defer engine.RUnlock()
-	if pgName == "" {
-		for _, pgCtrl := range engine.pgCtrls {
-			_pgCtrl := pgCtrl
-			engine.opsChan <- orcOperScheduleDrift{_pgCtrl, fromNode, toNode, pgInstance, force}
-		}
-	} else {
-		if pgCtrl, ok := engine.pgCtrls[pgName]; ok {
-			engine.opsChan <- orcOperScheduleDrift{pgCtrl, fromNode, toNode, pgInstance, force}
-		}
-	}
-	// FIXME: do we need to tell dependsCtrl to drift?
-	// so far we just wait for the dependsCtrl to react to the events
-}
-
 func (engine *OrcEngine) GetConstraints(cstType string) (ConstraintSpec, bool) {
 	return cstController.GetConstraint(cstType)
 }
@@ -567,12 +606,6 @@ func (engine *OrcEngine) DeleteNotify(callback string) error {
 		return ErrNotifyNotExists
 	} else {
 		return ntfController.RemoveNotify(callback, engine.store)
-	}
-}
-
-func (engine *OrcEngine) ChageState(pgName, op string, instance int) {
-	if pgCtrl, ok := engine.pgCtrls[pgName]; ok {
-		engine.opsChan <- orcOperChangeState{pgCtrl, op, instance}
 	}
 }
 

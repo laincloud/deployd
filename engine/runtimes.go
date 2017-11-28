@@ -9,6 +9,7 @@ import (
 type RunState int
 type HealthState int
 type ExpectState int
+type PGOpState int32
 
 var RestartMaxCount int
 
@@ -34,6 +35,16 @@ const (
 const (
 	ExpectStateRun = iota
 	ExpectStateStop
+)
+
+const (
+	PGOpStateIdle = iota
+	PGOpStateScheduling
+	PGOpStateDrifting
+	PGOpStateRemoving
+	PGOpStateStarting
+	PGOpStateStoping
+	PGOpStateRestarting
 )
 
 func (rs RunState) String() string {
@@ -76,12 +87,33 @@ func (hs HealthState) String() string {
 	}
 }
 
-func (hs ExpectState) String() string {
-	switch hs {
+func (es ExpectState) String() string {
+	switch es {
 	case ExpectStateRun:
 		return "Run"
 	case ExpectStateStop:
 		return "Stop"
+	default:
+		return "error"
+	}
+}
+
+func (pgos PGOpState) String() string {
+	switch pgos {
+	case PGOpStateIdle:
+		return "Idle"
+	case PGOpStateScheduling:
+		return "Scheduling"
+	case PGOpStateDrifting:
+		return "Drifting"
+	case PGOpStateRemoving:
+		return "Removing"
+	case PGOpStateStarting:
+		return "Starting"
+	case PGOpStateStoping:
+		return "Stoping"
+	case PGOpStateRestarting:
+		return "Restarting"
 	default:
 		return "error"
 	}

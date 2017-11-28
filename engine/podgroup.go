@@ -23,6 +23,8 @@ type podGroupController struct {
 
 	engine *OrcEngine
 
+	opState PGOpState
+
 	sync.RWMutex
 	spec      PodGroupSpec
 	prevState []PodPrevState
@@ -38,6 +40,23 @@ type podGroupController struct {
 
 func (pgCtrl *podGroupController) String() string {
 	return fmt.Sprintf("PodGroupCtrl %s", pgCtrl.spec)
+}
+
+func (pgCtrl *podGroupController) CanOperate(pgops PGOpState) PGOpState {
+	pgCtrl.Lock()
+	defer pgCtrl.Unlock()
+	if pgCtrl.opState == PGOpStateIdle {
+		pgCtrl.opState = pgops
+		return PGOpStateIdle
+	}
+	return pgCtrl.opState
+}
+
+// called by signle goroutine
+func (pgCtrl *podGroupController) OperateOver() {
+	pgCtrl.Lock()
+	defer pgCtrl.Unlock()
+	pgCtrl.opState = PGOpStateIdle
 }
 
 func (pgCtrl *podGroupController) Inspect() PodGroupWithSpec {
@@ -139,6 +158,7 @@ func (pgCtrl *podGroupController) RescheduleInstance(numInstances int, restartPo
 		pgCtrl.opsChan <- pgOperSaveStore{true}
 	}
 	pgCtrl.opsChan <- pgOperLogOperation{"Reschedule instance number finished"}
+	pgCtrl.opsChan <- pgOperOver{}
 }
 
 func (pgCtrl *podGroupController) RescheduleSpec(podSpec PodSpec) {
@@ -172,6 +192,7 @@ func (pgCtrl *podGroupController) RescheduleSpec(podSpec PodSpec) {
 	pgCtrl.opsChan <- pgOperSnapshotPrevState{}
 	pgCtrl.opsChan <- pgOperSaveStore{true}
 	pgCtrl.opsChan <- pgOperLogOperation{"Reschedule spec finished"}
+	pgCtrl.opsChan <- pgOperOver{}
 }
 
 func (pgCtrl *podGroupController) RescheduleDrift(fromNode, toNode string, instanceNo int, force bool) {
@@ -193,6 +214,7 @@ func (pgCtrl *podGroupController) RescheduleDrift(fromNode, toNode string, insta
 	pgCtrl.opsChan <- pgOperSnapshotPrevState{}
 	pgCtrl.opsChan <- pgOperSaveStore{false}
 	pgCtrl.opsChan <- pgOperLogOperation{"Reschedule drift finished"}
+	pgCtrl.opsChan <- pgOperOver{}
 }
 
 func (pgCtrl *podGroupController) Remove() {
@@ -208,6 +230,7 @@ func (pgCtrl *podGroupController) Remove() {
 	pgCtrl.opsChan <- pgOperLogOperation{"Remove finished"}
 	pgCtrl.opsChan <- pgOperSnapshotEagleView{spec.Name}
 	pgCtrl.opsChan <- pgOperPurge{}
+	pgCtrl.opsChan <- pgOperOver{}
 }
 
 func (pgCtrl *podGroupController) Refresh(force bool) {
@@ -242,6 +265,7 @@ func (pgCtrl *podGroupController) ChageState(op string, instance int) {
 	}
 	pgCtrl.opsChan <- pgOperSnapshotGroup{true}
 	pgCtrl.opsChan <- pgOperSaveStore{true}
+	pgCtrl.opsChan <- pgOperOver{}
 }
 
 func (pgCtrl *podGroupController) Activate(c cluster.Cluster, store storage.Store, eagle *RuntimeEagleView, stop chan struct{}) {
@@ -473,6 +497,7 @@ func newPodGroupController(spec PodGroupSpec, states []PodPrevState, pg PodGroup
 
 	pgCtrl := &podGroupController{
 		engine:   engine,
+		opState:  PGOpStateIdle,
 		spec:     spec,
 		group:    pg,
 		podCtrls: podCtrls,

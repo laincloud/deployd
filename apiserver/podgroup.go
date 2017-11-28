@@ -52,6 +52,9 @@ func (rpg RestfulPodGroups) Delete(ctx context.Context, r *http.Request) (int, i
 		if err == engine.ErrPodGroupNotExists {
 			return http.StatusNotFound, err.Error()
 		}
+		if _, ok := err.(engine.OperLockedError); ok {
+			return http.StatusLocked, err.Error()
+		}
 		return http.StatusInternalServerError, err.Error()
 	}
 
@@ -129,10 +132,13 @@ func (rpg RestfulPodGroups) Patch(ctx context.Context, r *http.Request) (int, in
 		instance := form.ParamInt(r, "instance", 0)
 		opTypeOptions := []string{"start", "stop", "restart"}
 		opType := form.ParamStringOptions(r, "optype", opTypeOptions, "noop")
-		orcEngine.ChageState(pgName, opType, instance)
+		err = orcEngine.ChageState(pgName, opType, instance)
 	}
 
 	if err != nil {
+		if _, ok := err.(engine.OperLockedError); ok {
+			return http.StatusLocked, err.Error()
+		}
 		switch err {
 		case engine.ErrPodGroupNotExists:
 			return http.StatusNotFound, err.Error()
