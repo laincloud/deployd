@@ -54,5 +54,5 @@ func TestEagleViewRefresh(t *testing.T) {
 		t.Errorf("We should be able to remove the pod group, %s", err)
 	}
 
-	time.Sleep(10 * time.Second)
+	time.Sleep(20 * time.Second)
 }

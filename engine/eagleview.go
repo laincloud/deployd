@@ -55,8 +55,8 @@ func (ev *RuntimeEagleView) Refresh(c cluster.Cluster) error {
 	})
 	if err == nil {
 		ev.Lock()
-		defer ev.Unlock()
 		ev.podGroups = podGroups
+		ev.Unlock()
 		totalPodGroups = len(podGroups)
 	}
 	return err
@@ -74,7 +74,9 @@ func (ev *RuntimeEagleView) RefreshPodGroup(c cluster.Cluster, pgName string) ([
 		fmt.Sprintf("%s.pg_name=%s", kLainLabelPrefix, pgName),
 	}
 	if pods, err := ev.refreshByFilters(c, filters); err == nil {
+		ev.Lock()
 		ev.podGroups[pgName] = pods
+		ev.Unlock()
 		totalContainers = len(pods)
 		return pods, nil
 	} else {

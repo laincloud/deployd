@@ -2,7 +2,6 @@ package etcd
 
 import (
 	"encoding/json"
-	"fmt"
 	"hash/fnv"
 	"strings"
 	"sync"
@@ -24,15 +23,15 @@ type EtcdStore struct {
 func (store *EtcdStore) Get(key string, v interface{}) error {
 	if resp, err := store.keysApi.Get(store.ctx, key, &client.GetOptions{Quorum: true}); err != nil {
 		if cerr, ok := err.(client.Error); ok && cerr.Code == client.ErrorCodeKeyNotFound {
-			return storage.ErrNoSuchKey
+			return storage.KMissingError
 		}
 		return err
 	} else {
 		if resp.Node == nil {
-			return fmt.Errorf("Etcd Store returns a nil node")
+			return storage.KNilNodeError
 		}
 		if resp.Node.Dir {
-			return fmt.Errorf("Etcd Store returns this is a directory node")
+			return storage.KDirNodeError
 		}
 		value := resp.Node.Value
 		if err := json.Unmarshal([]byte(value), v); err != nil {
@@ -67,15 +66,15 @@ func (store *EtcdStore) KeysByPrefix(prefix string) ([]string, error) {
 	keys := make([]string, 0)
 	if resp, err := store.keysApi.Get(store.ctx, prefix, &client.GetOptions{Quorum: true}); err != nil {
 		if cerr, ok := err.(client.Error); ok && cerr.Code == client.ErrorCodeKeyNotFound {
-			return keys, storage.ErrNoSuchKey
+			return keys, storage.KMissingError
 		}
 		return keys, err
 	} else {
 		if resp.Node == nil {
-			return keys, fmt.Errorf("Etcd store returns a nil node")
+			return keys, storage.KNilNodeError
 		}
 		if !resp.Node.Dir {
-			return keys, fmt.Errorf("Etcd store returns a non-directory node")
+			return keys, storage.KNonDirNodeError
 		}
 		for _, node := range resp.Node.Nodes {
 			if node != nil {

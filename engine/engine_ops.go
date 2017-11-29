@@ -114,3 +114,13 @@ type orcOperScheduleDrift struct {
 func (op orcOperScheduleDrift) Do(engine *OrcEngine) {
 	op.pgCtrl.RescheduleDrift(op.fromNode, op.toNode, op.instanceNo, op.force)
 }
+
+type orcOperChangeState struct {
+	pgCtrl   *podGroupController
+	op       string
+	instance int
+}
+
+func (op orcOperChangeState) Do(engine *OrcEngine) {
+	op.pgCtrl.ChangeState(op.op, op.instance)
+}

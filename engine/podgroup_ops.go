@@ -100,6 +100,8 @@ func (op pgOperUpgradeInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 	newPodSpec.PrevState = podCtrl.spec.PrevState.Clone() // upgrade action, state should not changed
 	prevNodeName := newPodSpec.PrevState.NodeName
 
+	pgCtrl.waitLastPodHealthy(op.instanceNo - 1)
+
 	var lowOp pgOperation
 	lowOp = pgOperRemoveInstance{op.instanceNo, op.oldPodSpec}
 	lowOp.Do(pgCtrl, c, store, ev)
@@ -136,6 +138,8 @@ func (op pgOperRefreshInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 	podCtrl.Refresh(c)
 	runtime = podCtrl.pod.ImRuntime
 
+	// eagleview ids
+	// in case of pod created failed
 	evIds := make([]string, len(podCtrl.spec.Containers))
 	evVersion := -1
 	for _, podContainer := range pgCtrl.evSnapshot {
@@ -148,12 +152,20 @@ func (op pgOperRefreshInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 			}
 		}
 	}
+
 	container := podCtrl.pod.Containers[0]
 	if runtime.State == RunStateSuccess {
 		if runtime.Healthst == HealthStateUnHealthy {
-			log.Warnf("PodGroupCtrl %s, we found pod unhealthy", op.spec)
-			ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name,
-				op.instanceNo, time.Now(), NotifyPodUnHealthy))
+			startAt := podCtrl.pod.Containers[0].Runtime.State.StartedAt
+			checkTime := podCtrl.spec.GetSetupTime()
+			if checkTime < DefaultSetUpTime {
+				checkTime = DefaultSetUpTime
+			}
+			if time.Now().After(startAt.Add(time.Second * time.Duration(checkTime) * 5)) {
+				log.Warnf("PodGroupCtrl %s, we found pod unhealthy", op.spec)
+				ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name,
+					op.instanceNo, time.Now(), NotifyPodUnHealthy))
+			}
 		}
 		if generics.Equal_StringSlice(evIds, podCtrl.pod.ContainerIds()) && op.spec.Version == evVersion {
 			pod := podCtrl.pod.Clone()
@@ -213,7 +225,7 @@ func (op pgOperRefreshInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 		runtime = podCtrl.pod.ImRuntime
 		return false
 	}
-	if podCtrl.pod.NeedRestart(op.spec.RestartPolicy) {
+	if !pgCtrl.engine.config.Maintenance && podCtrl.pod.NeedRestart(op.spec.RestartPolicy) {
 		if podCtrl.pod.RestartEnoughTimes() {
 			ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name,
 				op.instanceNo, container.Runtime.State.FinishedAt, NotifyLetPodGo))
@@ -389,6 +401,8 @@ func (op pgOperDriftInstance) Do(pgCtrl *podGroupController, c cluster.Cluster, 
 	oldSpec, oldPod := podCtrl.spec.Clone(), podCtrl.pod
 	oldNodeName := oldPod.NodeName()
 
+	pgCtrl.waitLastPodHealthy(op.instanceNo - 1)
+
 	isDrifted = podCtrl.Drift(c, op.fromNode, op.toNode, op.force)
 	runtime = podCtrl.pod.ImRuntime
 	if isDrifted {
@@ -497,5 +511,64 @@ func (op pgOperSnapshotPrevState) Do(pgCtrl *podGroupController, c cluster.Clust
 		newState[i] = podCtrl.spec.PrevState.Clone()
 	}
 	pgCtrl.prevState = newState
+	return false
+}
+
+type pgOperSendState struct {
+	state string
+}
+
+func (op pgOperSendState) Do(pgCtrl *podGroupController, c cluster.Cluster, store storage.Store, ev *RuntimeEagleView) bool {
+	pgCtrl.Lock()
+	pgCtrl.group.LastError = op.state
+	pgCtrl.Unlock()
+
+	pgCtrl.opsChan <- pgOperSnapshotGroup{true}
+	return false
+}
+
+type pgOperChangeState struct {
+	op       string
+	instance int
+}
+
+func (op pgOperChangeState) Do(pgCtrl *podGroupController, c cluster.Cluster, store storage.Store, ev *RuntimeEagleView) bool {
+	start := time.Now()
+	defer func() {
+		pgCtrl.RLock()
+		log.Infof("%s change instance state, op=%+v,  duration=%s", pgCtrl, op, time.Now().Sub(start))
+		pgCtrl.RUnlock()
+	}()
+	podCtrl := pgCtrl.podCtrls[op.instance-1]
+	switch op.op {
+	case "start":
+		podCtrl.Start(c)
+		if podCtrl.pod.State != RunStateFail {
+			podCtrl.pod.ChangeTargetState(ExpectStateRun)
+		}
+	case "stop":
+		podCtrl.Stop(c)
+		if podCtrl.pod.State != RunStateFail {
+			log.Infof("ExpectStateStop:%v", ExpectStateStop)
+			podCtrl.pod.ChangeTargetState(ExpectStateStop)
+			log.Infof("podCtrl.pod.TargetState:%v", podCtrl.pod.TargetState)
+		}
+	case "restart":
+		pgCtrl.waitLastPodHealthy(op.instance - 1)
+		podCtrl.Restart(c)
+		if podCtrl.pod.State != RunStateFail {
+			podCtrl.pod.ChangeTargetState(ExpectStateRun)
+		}
+	}
+	log.Infof("podCtrl.pod:%v,podCtrl.pod.State:%v, target_state:%v", podCtrl.pod, podCtrl.pod.State, podCtrl.pod.TargetState)
+	return false
+}
+
+// Mark podgroup operated over
+type pgOperOver struct {
+}
+
+func (op pgOperOver) Do(pgCtrl *podGroupController, c cluster.Cluster, store storage.Store, ev *RuntimeEagleView) bool {
+	pgCtrl.OperateOver()
 	return false
 }

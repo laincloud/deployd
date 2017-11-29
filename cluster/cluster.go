@@ -29,6 +29,7 @@ type Cluster interface {
 	DisconnectContainer(networkName string, id string, force bool) error
 	StartContainer(id string) error
 	StopContainer(id string, timeout ...int) error
+	RestartContainer(id string, timeout ...int) error
 	InspectContainer(id string) (adoc.ContainerDetail, error)
 	RemoveContainer(id string, force bool, volumes bool) error
 	RenameContainer(id string, name string) error

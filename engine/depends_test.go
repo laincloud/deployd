@@ -38,7 +38,7 @@ func TestDependsPodCtrl(t *testing.T) {
 	// event.NodeName = "node2"
 	// publisher.EmitEvent(event)
 
-	time.Sleep(40 * time.Second)
+	time.Sleep(30 * time.Second)
 	if pods, err := engine.GetDependencyPod("hello.portal"); err != nil {
 		t.Errorf("Cannot get the depends pods back, %s", err)
 	} else {
@@ -67,7 +67,7 @@ func TestDependsPodCtrl(t *testing.T) {
 		}
 	}
 
-	time.Sleep(10 * time.Second)
+	time.Sleep(20 * time.Second)
 
 	fmt.Println("==========================\n\n")
 	if err := engine.RemoveDependencyPod("hello.portal", true); err != nil {

@@ -21,6 +21,10 @@ type PodGroupWithSpec struct {
 type podGroupController struct {
 	Publisher
 
+	engine *OrcEngine
+
+	opState PGOpState
+
 	sync.RWMutex
 	spec      PodGroupSpec
 	prevState []PodPrevState
@@ -36,6 +40,23 @@ type podGroupController struct {
 
 func (pgCtrl *podGroupController) String() string {
 	return fmt.Sprintf("PodGroupCtrl %s", pgCtrl.spec)
+}
+
+func (pgCtrl *podGroupController) CanOperate(pgops PGOpState) PGOpState {
+	pgCtrl.Lock()
+	defer pgCtrl.Unlock()
+	if pgCtrl.opState == PGOpStateIdle {
+		pgCtrl.opState = pgops
+		return PGOpStateIdle
+	}
+	return pgCtrl.opState
+}
+
+// called by signle goroutine
+func (pgCtrl *podGroupController) OperateOver() {
+	pgCtrl.Lock()
+	defer pgCtrl.Unlock()
+	pgCtrl.opState = PGOpStateIdle
 }
 
 func (pgCtrl *podGroupController) Inspect() PodGroupWithSpec {
@@ -137,13 +158,14 @@ func (pgCtrl *podGroupController) RescheduleInstance(numInstances int, restartPo
 		pgCtrl.opsChan <- pgOperSaveStore{true}
 	}
 	pgCtrl.opsChan <- pgOperLogOperation{"Reschedule instance number finished"}
+	pgCtrl.opsChan <- pgOperOver{}
 }
 
 func (pgCtrl *podGroupController) RescheduleSpec(podSpec PodSpec) {
 	pgCtrl.RLock()
 	spec := pgCtrl.spec.Clone()
 	pgCtrl.RUnlock()
-
+	// pgCtrl.group.Pods[0].NodeName()
 	if spec.Pod.Equals(podSpec) {
 		return
 	}
@@ -162,7 +184,6 @@ func (pgCtrl *podGroupController) RescheduleSpec(podSpec PodSpec) {
 	pgCtrl.opsChan <- pgOperSaveStore{true}
 	pgCtrl.opsChan <- pgOperSnapshotEagleView{spec.Name}
 	for i := 0; i < spec.NumInstances; i += 1 {
-		pgCtrl.waitLastPodStarted(i, podSpec)
 		pgCtrl.opsChan <- pgOperUpgradeInstance{i + 1, spec.Version, oldPodSpec, spec.Pod}
 		pgCtrl.opsChan <- pgOperSnapshotGroup{true}
 		pgCtrl.opsChan <- pgOperSaveStore{true}
@@ -171,6 +192,7 @@ func (pgCtrl *podGroupController) RescheduleSpec(podSpec PodSpec) {
 	pgCtrl.opsChan <- pgOperSnapshotPrevState{}
 	pgCtrl.opsChan <- pgOperSaveStore{true}
 	pgCtrl.opsChan <- pgOperLogOperation{"Reschedule spec finished"}
+	pgCtrl.opsChan <- pgOperOver{}
 }
 
 func (pgCtrl *podGroupController) RescheduleDrift(fromNode, toNode string, instanceNo int, force bool) {
@@ -183,7 +205,6 @@ func (pgCtrl *podGroupController) RescheduleDrift(fromNode, toNode string, insta
 	pgCtrl.opsChan <- pgOperLogOperation{fmt.Sprintf("Start to reschedule drift from %s", fromNode)}
 	if instanceNo == -1 {
 		for i := 0; i < spec.NumInstances; i += 1 {
-			pgCtrl.waitLastPodStarted(i, spec.Pod)
 			pgCtrl.opsChan <- pgOperDriftInstance{i + 1, fromNode, toNode, force}
 		}
 	} else {
@@ -193,6 +214,7 @@ func (pgCtrl *podGroupController) RescheduleDrift(fromNode, toNode string, insta
 	pgCtrl.opsChan <- pgOperSnapshotPrevState{}
 	pgCtrl.opsChan <- pgOperSaveStore{false}
 	pgCtrl.opsChan <- pgOperLogOperation{"Reschedule drift finished"}
+	pgCtrl.opsChan <- pgOperOver{}
 }
 
 func (pgCtrl *podGroupController) Remove() {
@@ -208,6 +230,7 @@ func (pgCtrl *podGroupController) Remove() {
 	pgCtrl.opsChan <- pgOperLogOperation{"Remove finished"}
 	pgCtrl.opsChan <- pgOperSnapshotEagleView{spec.Name}
 	pgCtrl.opsChan <- pgOperPurge{}
+	pgCtrl.opsChan <- pgOperOver{}
 }
 
 func (pgCtrl *podGroupController) Refresh(force bool) {
@@ -227,6 +250,22 @@ func (pgCtrl *podGroupController) Refresh(force bool) {
 	pgCtrl.opsChan <- pgOperSnapshotPrevState{}
 	pgCtrl.opsChan <- pgOperSaveStore{false}
 	pgCtrl.opsChan <- pgOperLogOperation{"PodGroup refreshing finished"}
+}
+
+func (pgCtrl *podGroupController) ChangeState(op string, instance int) {
+	pgCtrl.RLock()
+	spec := pgCtrl.spec.Clone()
+	pgCtrl.RUnlock()
+	if instance == 0 {
+		for i := 0; i < spec.NumInstances; i += 1 {
+			pgCtrl.opsChan <- pgOperChangeState{op, i + 1}
+		}
+	} else if instance > 0 && instance <= spec.NumInstances {
+		pgCtrl.opsChan <- pgOperChangeState{op, instance}
+	}
+	pgCtrl.opsChan <- pgOperSnapshotGroup{true}
+	pgCtrl.opsChan <- pgOperSaveStore{true}
+	pgCtrl.opsChan <- pgOperOver{}
 }
 
 func (pgCtrl *podGroupController) Activate(c cluster.Cluster, store storage.Store, eagle *RuntimeEagleView, stop chan struct{}) {
@@ -390,13 +429,14 @@ func (pgCtrl *podGroupController) updatePodPorts(podSpec PodSpec) bool {
 	return true
 }
 
-func (pgCtrl *podGroupController) waitLastPodStarted(i int, podSpec PodSpec) {
-	retries := 5
-	sleepTime := 10
-	if podSpec.GetSetupTime() > 10 {
-		sleepTime = podSpec.GetSetupTime()
-	}
+func (pgCtrl *podGroupController) waitLastPodHealthy(i int) {
 	if i > 0 {
+		retries := 5
+		sleepTime := DefaultSetUpTime
+		podSpec := pgCtrl.spec.Pod
+		if podSpec.GetSetupTime() > DefaultSetUpTime {
+			sleepTime = podSpec.GetSetupTime()
+		}
 		// wait some seconds for new instance's initialization completed, before we update next one
 		if pgCtrl.podCtrls[i].pod.Healthst == HealthStateNone {
 			time.Sleep(time.Second * time.Duration(podSpec.GetSetupTime()))
@@ -407,13 +447,19 @@ func (pgCtrl *podGroupController) waitLastPodStarted(i int, podSpec PodSpec) {
 					break
 				}
 				retryTimes++
-				// wait until to non-starting state
-				if pgCtrl.podCtrls[i-1].pod.Healthst != HealthStateStarting {
+				// wait until to healthy state
+				if pgCtrl.podCtrls[i-1].pod.Healthst == HealthStateHealthy {
 					break
 				}
 				time.Sleep(time.Second * time.Duration(sleepTime))
 			}
 		}
+	}
+	// if i == 1 && retryTimes == retries {
+	// 	//rollback
+	// }
+	if pgCtrl.podCtrls[i].pod.Healthst != HealthStateNone {
+		pgCtrl.podCtrls[i].pod.Healthst = HealthStateStarting
 	}
 }
 
@@ -423,7 +469,7 @@ func (pgCtrl *podGroupController) emptyError() {
 	pgCtrl.group.LastError = ""
 }
 
-func newPodGroupController(spec PodGroupSpec, states []PodPrevState, pg PodGroup) *podGroupController {
+func newPodGroupController(spec PodGroupSpec, states []PodPrevState, pg PodGroup, engine *OrcEngine) *podGroupController {
 	podCtrls := make([]*podController, spec.NumInstances)
 	for i := range podCtrls {
 		var pod Pod
@@ -450,6 +496,8 @@ func newPodGroupController(spec PodGroupSpec, states []PodPrevState, pg PodGroup
 	}
 
 	pgCtrl := &podGroupController{
+		engine:   engine,
+		opState:  PGOpStateIdle,
 		spec:     spec,
 		group:    pg,
 		podCtrls: podCtrls,

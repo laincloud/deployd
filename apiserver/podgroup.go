@@ -52,6 +52,9 @@ func (rpg RestfulPodGroups) Delete(ctx context.Context, r *http.Request) (int, i
 		if err == engine.ErrPodGroupNotExists {
 			return http.StatusNotFound, err.Error()
 		}
+		if _, ok := err.(engine.OperLockedError); ok {
+			return http.StatusLocked, err.Error()
+		}
 		return http.StatusInternalServerError, err.Error()
 	}
 
@@ -92,7 +95,7 @@ func (rpg RestfulPodGroups) Patch(ctx context.Context, r *http.Request) (int, in
 	}
 
 	orcEngine := getEngine(ctx)
-	options := []string{"replica", "spec"}
+	options := []string{"replica", "spec", "operation"}
 	cmd := form.ParamStringOptions(r, "cmd", options, "noop")
 	var err error
 	switch cmd {
@@ -125,9 +128,17 @@ func (rpg RestfulPodGroups) Patch(ctx context.Context, r *http.Request) (int, in
 			return http.StatusBadRequest, fmt.Sprintf("Missing parameter for PodSpec")
 		}
 		err = orcEngine.RescheduleSpec(pgName, podSpec)
+	case "operation":
+		instance := form.ParamInt(r, "instance", 0)
+		opTypeOptions := []string{"start", "stop", "restart"}
+		opType := form.ParamStringOptions(r, "optype", opTypeOptions, "noop")
+		err = orcEngine.ChangeState(pgName, opType, instance)
 	}
 
 	if err != nil {
+		if _, ok := err.(engine.OperLockedError); ok {
+			return http.StatusLocked, err.Error()
+		}
 		switch err {
 		case engine.ErrPodGroupNotExists:
 			return http.StatusNotFound, err.Error()

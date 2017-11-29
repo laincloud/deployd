@@ -70,7 +70,7 @@ func (nc *notifyController) LoadNotifies(store storage.Store) error {
 	callbacks := []string{}
 	notifyKey := fmt.Sprintf("%s/%s", kLainDeploydRootKey, kLainNotifyKey)
 	if err := store.Get(notifyKey, &callbacks); err != nil {
-		if err != storage.ErrNoSuchKey {
+		if err != storage.KMissingError {
 			log.Errorf("Failed to load nofities from storage, %s", err)
 			return err
 		}

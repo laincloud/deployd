@@ -1,13 +1,15 @@
 package engine
 
 import (
-	"time"
-
 	"github.com/mijia/adoc"
+	"github.com/mijia/sweb/log"
+	"time"
 )
 
 type RunState int
 type HealthState int
+type ExpectState int
+type PGOpState int32
 
 var RestartMaxCount int
 
@@ -20,6 +22,7 @@ const (
 	RunStateInconsistent
 	RunStateMissing
 	RunStateRemoved
+	RunStatePaused
 )
 
 const (
@@ -27,6 +30,21 @@ const (
 	HealthStateStarting
 	HealthStateHealthy
 	HealthStateUnHealthy
+)
+
+const (
+	ExpectStateRun = iota
+	ExpectStateStop
+)
+
+const (
+	PGOpStateIdle = iota
+	PGOpStateScheduling
+	PGOpStateDrifting
+	PGOpStateRemoving
+	PGOpStateStarting
+	PGOpStateStoping
+	PGOpStateRestarting
 )
 
 func (rs RunState) String() string {
@@ -47,6 +65,8 @@ func (rs RunState) String() string {
 		return "RunStateInconsistent"
 	case RunStateRemoved:
 		return "RunStateRemoved"
+	case RunStatePaused:
+		return "RunStatePaused"
 	default:
 		return "Unknown RunState"
 	}
@@ -63,12 +83,45 @@ func (hs HealthState) String() string {
 	case HealthStateUnHealthy:
 		return "unhealthy"
 	default:
-		return "None"
+		return "none"
+	}
+}
+
+func (es ExpectState) String() string {
+	switch es {
+	case ExpectStateRun:
+		return "Run"
+	case ExpectStateStop:
+		return "Stop"
+	default:
+		return "error"
+	}
+}
+
+func (pgos PGOpState) String() string {
+	switch pgos {
+	case PGOpStateIdle:
+		return "Idle"
+	case PGOpStateScheduling:
+		return "Scheduling"
+	case PGOpStateDrifting:
+		return "Drifting"
+	case PGOpStateRemoving:
+		return "Removing"
+	case PGOpStateStarting:
+		return "Starting"
+	case PGOpStateStoping:
+		return "Stoping"
+	case PGOpStateRestarting:
+		return "Restarting"
+	default:
+		return "error"
 	}
 }
 
 type ImRuntime struct {
 	BaseRuntime
+	TargetState  ExpectState
 	DriftCount   int
 	RestartCount int
 	RestartAt    time.Time
@@ -149,6 +202,9 @@ func (pod Pod) ContainerIds() []string {
 }
 
 func (pod Pod) NeedRestart(policy RestartPolicy) bool {
+	if pod.TargetState == ExpectStateStop {
+		return false
+	}
 	state := pod.State
 	if policy == RestartPolicyAlways {
 		return state == RunStateExit || state == RunStateFail
@@ -185,6 +241,11 @@ func (pod Pod) PodIp() string {
 		return pod.Containers[0].NodeIp
 	}
 	return ""
+}
+
+func (pod *Pod) ChangeTargetState(state ExpectState) {
+	pod.TargetState = state
+	log.Infof("target state:::%v", state)
 }
 
 type PodGroup struct {
