@@ -20,7 +20,7 @@ const (
 	EtcdResourcesKey   = "/lain/config/resources"
 	EtcdGuardSwitchKey = "/lain/config/guardswitch"
 
-	EtcdReadOnlyKey = "/lain/deployd/engine/config"
+	EtcdConfigKey = "/lain/deployd/engine/config"
 )
 
 var (
@@ -37,7 +37,7 @@ func watchResource(store storage.Store) {
 }
 
 func WatchEngineConfig(engine *OrcEngine) {
-	watcher(engine.store, EtcdReadOnlyKey, engine.config)
+	watcher(engine.store, EtcdConfigKey, engine.config)
 }
 
 func watcher(store storage.Store, key string, v interface{}) {
@@ -85,7 +85,7 @@ func GuardGotoWork(store storage.Store) bool {
 }
 
 func ConfigEngine(engine *OrcEngine) bool {
-	if err := engine.store.Set(EtcdReadOnlyKey, engine.config, true); err != nil {
+	if err := engine.store.Set(EtcdConfigKey, engine.config, true); err != nil {
 		return false
 	}
 	return true

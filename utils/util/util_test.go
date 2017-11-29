@@ -12,11 +12,11 @@ import (
 )
 
 func Test_ParseNameInstanceNo(t *testing.T) {
-	containerName := "microloan-pdl-core-test.web.web.v3-i1-d0"
+	containerName := "webrouter.worker.worker.v3-i1-d0"
 
 	name, incetance, err := ParseNameInstanceNo(containerName)
 	assert.Equal(t, nil, err)
-	assert.Equal(t, "microloan-pdl-core-test.web.web", name)
+	assert.Equal(t, "webrouter.worker.worker", name)
 	assert.Equal(t, 1, incetance)
 }
 

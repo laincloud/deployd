@@ -122,5 +122,5 @@ type orcOperChangeState struct {
 }
 
 func (op orcOperChangeState) Do(engine *OrcEngine) {
-	op.pgCtrl.ChageState(op.op, op.instance)
+	op.pgCtrl.ChangeState(op.op, op.instance)
 }

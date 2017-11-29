@@ -527,12 +527,12 @@ func (op pgOperSendState) Do(pgCtrl *podGroupController, c cluster.Cluster, stor
 	return false
 }
 
-type pgOperChageState struct {
+type pgOperChangeState struct {
 	op       string
 	instance int
 }
 
-func (op pgOperChageState) Do(pgCtrl *podGroupController, c cluster.Cluster, store storage.Store, ev *RuntimeEagleView) bool {
+func (op pgOperChangeState) Do(pgCtrl *podGroupController, c cluster.Cluster, store storage.Store, ev *RuntimeEagleView) bool {
 	start := time.Now()
 	defer func() {
 		pgCtrl.RLock()

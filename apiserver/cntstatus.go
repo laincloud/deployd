@@ -10,6 +10,8 @@ import (
 	"golang.org/x/net/context"
 )
 
+// cnt means container
+
 type RestfulCntStatusHstry struct {
 	server.BaseResource
 }

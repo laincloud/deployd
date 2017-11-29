@@ -252,16 +252,16 @@ func (pgCtrl *podGroupController) Refresh(force bool) {
 	pgCtrl.opsChan <- pgOperLogOperation{"PodGroup refreshing finished"}
 }
 
-func (pgCtrl *podGroupController) ChageState(op string, instance int) {
+func (pgCtrl *podGroupController) ChangeState(op string, instance int) {
 	pgCtrl.RLock()
 	spec := pgCtrl.spec.Clone()
 	pgCtrl.RUnlock()
 	if instance == 0 {
 		for i := 0; i < spec.NumInstances; i += 1 {
-			pgCtrl.opsChan <- pgOperChageState{op, i + 1}
+			pgCtrl.opsChan <- pgOperChangeState{op, i + 1}
 		}
 	} else if instance > 0 && instance <= spec.NumInstances {
-		pgCtrl.opsChan <- pgOperChageState{op, instance}
+		pgCtrl.opsChan <- pgOperChangeState{op, instance}
 	}
 	pgCtrl.opsChan <- pgOperSnapshotGroup{true}
 	pgCtrl.opsChan <- pgOperSaveStore{true}

@@ -21,10 +21,10 @@ func (m *ReadOnlySwitch) ServeHTTP(ctx context.Context, w http.ResponseWriter, r
 
 	if e.ReadOnly() && strings.ToUpper(r.Method) != "GET" &&
 		!strings.HasPrefix(r.URL.Path, "/api/engine/") {
-		log.Warnf("Do ReadOnly Request!, %q %q, duration=%v",
+		log.Warnf("Do ReadOnly Request Permitted!, %q %q, duration=%v",
 			r.Method, r.URL.Path, time.Since(start))
 		w.WriteHeader(403)
-		w.Write([]byte("Read Only Permitted.\n"))
+		w.Write([]byte("Do ReadOnly Permitted.\n"))
 		return ctx
 	}
 	return next(ctx, w, r)

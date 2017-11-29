@@ -132,7 +132,7 @@ func (rpg RestfulPodGroups) Patch(ctx context.Context, r *http.Request) (int, in
 		instance := form.ParamInt(r, "instance", 0)
 		opTypeOptions := []string{"start", "stop", "restart"}
 		opType := form.ParamStringOptions(r, "optype", opTypeOptions, "noop")
-		err = orcEngine.ChageState(pgName, opType, instance)
+		err = orcEngine.ChangeState(pgName, opType, instance)
 	}
 
 	if err != nil {

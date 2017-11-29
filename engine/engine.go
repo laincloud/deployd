@@ -297,7 +297,7 @@ func (engine *OrcEngine) DriftNode(fromNode, toNode string, pgName string, pgIns
 	// so far we just wait for the dependsCtrl to react to the events
 }
 
-func (engine *OrcEngine) ChageState(pgName, op string, instance int) error {
+func (engine *OrcEngine) ChangeState(pgName, op string, instance int) error {
 	engine.RLock()
 	defer engine.RUnlock()
 	if pgCtrl, ok := engine.pgCtrls[pgName]; ok {

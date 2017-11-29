@@ -117,6 +117,8 @@ func HandleDockerEvent(engine *OrcEngine, event *adoc.Event) {
 	}
 }
 
+// cnt means container
+
 const (
 	KCntStatus          = "/lain/deployd/histroy"
 	FmtKCntStatusLstPos = "/lain/deployd/histroy/%s/%d/lastpos"
