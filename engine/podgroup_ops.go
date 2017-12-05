@@ -153,6 +153,10 @@ func (op pgOperRefreshInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 		}
 	}
 
+	if len(podCtrl.pod.Containers) <= 0 {
+		return false
+	}
+
 	container := podCtrl.pod.Containers[0]
 	if runtime.State == RunStateSuccess {
 		if runtime.Healthst == HealthStateUnHealthy {
