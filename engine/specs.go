@@ -180,7 +180,11 @@ func (s ContainerSpec) Clone() ContainerSpec {
 	newSpec.SystemVolumes = generics.Clone_StringSlice(s.SystemVolumes)
 	newSpec.Command = generics.Clone_StringSlice(s.Command)
 	newSpec.DnsSearch = generics.Clone_StringSlice(s.DnsSearch)
-	newSpec.Entrypoint = generics.Clone_StringSlice(s.Entrypoint)
+	if s.Entrypoint == nil {
+		newSpec.Entrypoint = nil
+	} else {
+		newSpec.Entrypoint = generics.Clone_StringSlice(s.Entrypoint)
+	}
 	newSpec.LogConfig.Type = s.LogConfig.Type
 	newSpec.LogConfig.Config = generics.Clone_StringStringMap(s.LogConfig.Config)
 
@@ -207,6 +211,10 @@ func (s ContainerSpec) VerifyParams() bool {
 }
 
 func (s ContainerSpec) Equals(o ContainerSpec) bool {
+	if (s.Entrypoint == nil && o.Entrypoint != nil) || (s.Entrypoint != nil && o.Entrypoint == nil) {
+		return false
+	}
+
 	return s.Name == o.Name &&
 		s.Image == o.Image &&
 		generics.Equal_StringSlice(s.Env, o.Env) &&
