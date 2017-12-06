@@ -475,27 +475,6 @@ func (op pgOperPurge) Do(pgCtrl *podGroupController, c cluster.Cluster, store st
 	return true // to shutdown the worker routine
 }
 
-// generally used to remove corrupted containers
-// type pgOperRemoveCorruptedContainer struct {
-// 	ids []string
-// }
-
-// func (op pgOperRemoveCorruptedContainer) Do(pgCtrl *podGroupController, c cluster.Cluster, store storage.Store, ev *RuntimeEagleView) bool {
-// 	start := time.Now()
-// 	defer func() {
-// 		pgCtrl.RLock()
-// 		log.Infof("%s remove containers: , op=%+v, duration=%s", pgCtrl, op, time.Now().Sub(start))
-// 		pgCtrl.RUnlock()
-// 	}()
-// 	for _, cId := range ids {
-// 		log.Warnf("%s  find some corrupted container alive, try to remove it", pgCtrl)
-// 		if err := c.RemoveContainer(cId, true, false); err != nil {
-// 			log.Warnf("%s still cannot remove the container ", pgCtrl)
-// 		}
-// 	}
-// 	return true // to shutdown the worker routine
-// }
-
 type pgOperPushPodCtrl struct {
 	spec PodSpec
 }

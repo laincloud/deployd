@@ -21,7 +21,7 @@ var RestartInfoClearInterval time.Duration
 
 const (
 	DefaultHealthInterval = 10
-	DefaultHealthTimeout  = 5
+	DefaultHealthTimeout  = 1
 	DefaultHealthRetries  = 3
 
 	DefaultSetUpTime = 20
@@ -31,9 +31,7 @@ const (
 	CPUMaxLevel     = 8
 	CPUDeafultLevel = 2
 
-	CURL_TMPLT = `echo $(curl -s -o /dev/null -w '%%{http_code}\n' %s) | grep -Eq "^[2-3]..$"`
-
-	IpConflictErrorStr = "Address already assigned in block"
+	CURL_TMPLT = `echo $(timeout %v curl -s -o /dev/null -w '%%{http_code}\n' %s) | grep -Eq "^[2-3]..$"`
 )
 
 // podController is controlled by the podGroupController
@@ -262,13 +260,12 @@ func (pc *podController) Refresh(cluster cluster.Cluster) {
 }
 
 func (pc *podController) startContainer(cluster cluster.Cluster, id string) error {
-	// when deploy a new instance, ip conflict may happend
+	// start a new instance, ip conflict may happend
 	// (when 1. node down abnormally and did not reclaim resource as usually
-	//       2. swarm agent just down, we thought the node is just down)
+	//       2. swarm agent just down, we thought the node is just down and recreate )
 	// so we should reclaim ip resource when find ip conflict so that we can start new instance correctly
 	if err := cluster.StartContainer(id); err != nil {
 		log.Warnf("%s Cannot start container %s, %s", pc, id, err)
-		log.Warnf("err:%v, IpConflictErrorStr:%v", err.Error(), IpConflictErrorStr)
 		if corruptedIp := util.IpConflictErrorMatch(err.Error()); corruptedIp != "" {
 			// release ip
 			if e := network.ReleaseIp(corruptedIp); e == nil {
@@ -399,16 +396,6 @@ func (pc *podController) createContainer(cluster cluster.Cluster, filters []stri
 	hc := pc.createHostConfig(index)
 	nc := pc.createNetworkingConfig(index)
 	name := pc.createContainerName(index)
-
-	// FIXME: do we still need to rename this?
-	//if container, err := cluster.InspectContainer(name); err == nil {
-	//We got a same-named container which we need to rename it
-	//newName := fmt.Sprintf("%s-lain_did_it_%d", name, time.Now().Unix())
-	//log.Warnf("%s we found container has the same name %s, try to rename it to %s", pc, name, newName)
-	//if err := cluster.RenameContainer(container.Id, newName); err != nil {
-	//log.Warnf("%s Failed to rename the container as we need it, %s", pc, err)
-	//}
-	//}
 	return cluster.CreateContainer(cc, hc, nc, name)
 }
 
@@ -474,7 +461,7 @@ func (pc *podController) createContainerConfig(filters []string, index int) adoc
 					healthcheckUrl, ok := healthcheck.(string)
 					if ok {
 						url := "http://localhost:" + strconv.Itoa(port) + healthcheckUrl
-						cmd = fmt.Sprintf(CURL_TMPLT, url)
+						cmd = fmt.Sprintf(CURL_TMPLT, strconv.Itoa(options.Timeout), url)
 					}
 				} else {
 					log.Info("annotation without healthcheck")
@@ -485,7 +472,7 @@ func (pc *podController) createContainerConfig(filters []string, index int) adoc
 		}
 		if cmd != "" {
 			cc.Healthcheck = &adoc.HealthConfig{
-				Test:     []string{"CMD-SHELL", "timeout " + strconv.Itoa(options.Timeout) + " " + cmd + " || exit 1"},
+				Test:     []string{"CMD-SHELL", cmd + " || exit 1"},
 				Interval: time.Duration(options.Interval) * time.Second,
 				Timeout:  time.Duration(options.Timeout) * time.Second,
 				Retries:  options.Retries,

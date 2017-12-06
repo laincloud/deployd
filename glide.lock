@@ -1,5 +1,5 @@
-hash: b9aaffa1e99e4cc0f8fc9af2ab8b2e146257f813bdd92e2521fce83373d1eebc
-updated: 2017-12-07T12:36:29.801823046+08:00
+hash: d7f79835cd537ce80d32a8f856b864d8798d5c3a2b23ff96ed60517907f20f72
+updated: 2017-12-08T17:07:13.436711374+08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -98,7 +98,7 @@ imports:
   - jlexer
   - jwriter
 - name: github.com/mijia/adoc
-  version: b13894c1c54204ed818a345d2a5d7fc30f0c7239
+  version: 61048267773af442c15883facf06a09ec83a77f2
 - name: github.com/mijia/go-generics
   version: 2278a5f0de143e1d17ea16d56e7f85391bdb85a3
 - name: github.com/mijia/sweb

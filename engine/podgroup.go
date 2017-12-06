@@ -288,12 +288,12 @@ func (pgCtrl *podGroupController) Activate(c cluster.Cluster, store storage.Stor
 
 /*
  * To clean corrupted containers which do not used by cluster app any more
- * Must be called after just refrehsed podgroups or clean will works terrible
+ * Should be called just after refrehsed podgroups or clean will works terrible
  */
 func (pgCtrl *podGroupController) cleanCorruptedContainers() {
 	runtimePods := pgCtrl.evSnapshot
 	pods := make(map[int][]*container)
-	// parse []runtimePods to structure of [instance] => []containers
+	// parse slice runtimePods to map of [instance] => slice containers
 	for _, rtPod := range runtimePods {
 		instance := rtPod.InstanceNo
 		version := rtPod.Version
@@ -328,11 +328,11 @@ func (pgCtrl *podGroupController) cleanCorruptedContainers() {
 			delete(pgCtrl.evSnapshot, container.id)
 			ids[i] = container.id
 		}
-		go removeContainer(pgCtrl.engine.cluster, ids)
+		go removeContainers(pgCtrl.engine.cluster, ids)
 	}
 }
 
-func removeContainer(c cluster.Cluster, ids []string) {
+func removeContainers(c cluster.Cluster, ids []string) {
 	for _, cId := range ids {
 		log.Warnf("find some corrupted container alive, try to remove it")
 		if err := c.RemoveContainer(cId, true, false); err != nil {
