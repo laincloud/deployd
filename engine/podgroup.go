@@ -30,7 +30,7 @@ type podGroupController struct {
 	prevState []PodPrevState
 	group     PodGroup
 
-	evSnapshot []RuntimeEaglePod
+	evSnapshot map[string]RuntimeEaglePod // id => RuntimeEaglePod
 	podCtrls   []*podController
 	opsChan    chan pgOperation
 
@@ -284,6 +284,61 @@ func (pgCtrl *podGroupController) Activate(c cluster.Cluster, store storage.Stor
 			}
 		}
 	}()
+}
+
+/*
+ * To clean corrupted containers which do not used by cluster app any more
+ * Must be called after just refrehsed podgroups or clean will works terrible
+ */
+func (pgCtrl *podGroupController) cleanCorruptedContainers() {
+	runtimePods := pgCtrl.evSnapshot
+	pods := make(map[int][]*container)
+	// parse []runtimePods to structure of [instance] => []containers
+	for _, rtPod := range runtimePods {
+		instance := rtPod.InstanceNo
+		version := rtPod.Version
+		driftCount := rtPod.DriftCount
+		if pods[instance] == nil {
+			pods[instance] = make([]*container, 0)
+		}
+		pods[instance] = append(pods[instance],
+			&container{version: version,
+				instance:   instance,
+				driftCount: driftCount,
+				id:         rtPod.Container.Id,
+			})
+	}
+	log.Infof("pods::%v", pods)
+	corrupted := false
+	uselessContainers := make([]*container, 0)
+	for _, containers := range pods {
+		if len(containers) > 1 {
+			By(ByVersionAndDriftCounter).Sort(containers)
+			corrupted = true
+			for _, container := range containers[1:] {
+				uselessContainers = append(uselessContainers, container)
+			}
+		}
+	}
+	if corrupted {
+		ids := make([]string, len(uselessContainers))
+		for i, container := range uselessContainers {
+			log.Infof("need remove container:%v", container)
+			// remove container in cluster
+			delete(pgCtrl.evSnapshot, container.id)
+			ids[i] = container.id
+		}
+		go removeContainer(pgCtrl.engine.cluster, ids)
+	}
+}
+
+func removeContainer(c cluster.Cluster, ids []string) {
+	for _, cId := range ids {
+		log.Warnf("find some corrupted container alive, try to remove it")
+		if err := c.RemoveContainer(cId, true, false); err != nil {
+			log.Warnf("still cannot remove the container ")
+		}
+	}
 }
 
 func (pgCtrl *podGroupController) emitChangeEvent(changeType string, spec PodSpec, pod Pod, nodeName string) {

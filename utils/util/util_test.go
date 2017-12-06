@@ -20,6 +20,11 @@ func Test_ParseNameInstanceNo(t *testing.T) {
 	assert.Equal(t, 1, incetance)
 }
 
+func Test_IpConflictErrorMatch(t *testing.T) {
+	err := "IP assignment error, data: {IP:172.20.111.131 HandleID:<nil> Attrs:map[] Hostname:lain}: Address already assigned in block"
+	fmt.Printf("match : %v\n", IpConflictErrorMatch(err))
+}
+
 func Test_IsConnectionError(t *testing.T) {
 	err := errors.New("dial tcp 192.168.77.21:2376: getsockopt: connection refused")
 	assert.Equal(t, true, IsConnectionError(err))

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/laincloud/deployd/cluster"
+	"github.com/laincloud/deployd/network"
 	"github.com/laincloud/deployd/utils/util"
 	"github.com/mijia/adoc"
 	"github.com/mijia/go-generics"
@@ -31,6 +32,8 @@ const (
 	CPUDeafultLevel = 2
 
 	CURL_TMPLT = `echo $(curl -s -o /dev/null -w '%%{http_code}\n' %s) | grep -Eq "^[2-3]..$"`
+
+	IpConflictErrorStr = "Address already assigned in block"
 )
 
 // podController is controlled by the podGroupController
@@ -83,18 +86,9 @@ func (pc *podController) Deploy(cluster cluster.Cluster) {
 			pc.pod.LastError = fmt.Sprintf("Cannot create container, %s", err)
 			return
 		}
-
-		if err := cluster.StartContainer(id); err != nil {
-			log.Warnf("%s Cannot start container %s, %s", pc, id, err)
-			if !util.IsConnectionError(err) {
-				pc.pod.State = RunStateFail
-			}
-			pc.pod.LastError = fmt.Sprintf("Cannot start container, %s", err)
-		}
-
+		pc.startContainer(cluster, id)
 		pc.pod.Containers[i].Id = id
 		pc.refreshContainer(cluster, i)
-
 		if i == 0 && pc.pod.Containers[0].NodeName != "" {
 			filter := fmt.Sprintf("constraint:node==%s", pc.pod.Containers[0].NodeName)
 			filters = append(filters, filter)
@@ -210,13 +204,7 @@ func (pc *podController) Start(cluster cluster.Cluster) {
 	pc.pod.State = RunStateSuccess
 	pc.pod.LastError = ""
 	for i, container := range pc.pod.Containers {
-		if err := cluster.StartContainer(container.Id); err != nil {
-			log.Warnf("%s Cannot start the container %s, %s", pc, container.Id, err)
-			if !util.IsConnectionError(err) {
-				pc.pod.State = RunStateFail
-			}
-			pc.pod.LastError = fmt.Sprintf("Cannot start container, %s", err)
-		} else {
+		if err := pc.startContainer(cluster, container.Id); err == nil {
 			pc.refreshContainer(cluster, i)
 		}
 	}
@@ -271,6 +259,34 @@ func (pc *podController) Refresh(cluster cluster.Cluster) {
 		pc.refreshContainer(cluster, i)
 	}
 	pc.pod.UpdatedAt = time.Now()
+}
+
+func (pc *podController) startContainer(cluster cluster.Cluster, id string) error {
+	// when deploy a new instance, ip conflict may happend
+	// (when 1. node down abnormally and did not reclaim resource as usually
+	//       2. swarm agent just down, we thought the node is just down)
+	// so we should reclaim ip resource when find ip conflict so that we can start new instance correctly
+	if err := cluster.StartContainer(id); err != nil {
+		log.Warnf("%s Cannot start container %s, %s", pc, id, err)
+		log.Warnf("err:%v, IpConflictErrorStr:%v", err.Error(), IpConflictErrorStr)
+		if corruptedIp := util.IpConflictErrorMatch(err.Error()); corruptedIp != "" {
+			// release ip
+			if e := network.ReleaseIp(corruptedIp); e == nil {
+				// if released successed restart container again
+				if err = cluster.StartContainer(id); err == nil {
+					return nil
+				}
+			} else {
+				log.Warnf("%s Cannot release IP %s, %s", pc, id, err)
+			}
+		}
+		if !util.IsConnectionError(err) {
+			pc.pod.State = RunStateFail
+		}
+		pc.pod.LastError = fmt.Sprintf("Cannot start container, %s", err)
+		return err
+	}
+	return nil
 }
 
 // tryCorrectIPAddress try to correct container's ip address to given ip. return true if successed, otherwise return false.

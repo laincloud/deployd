@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	VERSION = "2.4.0"
+	VERSION = "2.4.1"
 )
 
 func main() {
@@ -35,7 +35,7 @@ func main() {
 	flag.IntVar(&maxRestartTimes, "maxRestartTimes", 3, "The max restart times for pod")
 	flag.IntVar(&restartInfoClearInterval, "restartInfoClearInterval", 30, "The interval to clear restart info (minutes)")
 	flag.BoolVar(&isDebug, "debug", false, "Debug mode switch")
-	flag.BoolVar(&version, "v", false, "Show version")
+	flag.BoolVar(&version, "version", false, "Show version")
 	flag.Parse()
 
 	if version {

@@ -73,9 +73,12 @@ func (op pgOperSnapshotEagleView) Do(pgCtrl *podGroupController, c cluster.Clust
 	if pods, err := ev.RefreshPodGroup(c, op.pgName); err != nil {
 		_err = err
 	} else {
-		snapshot := make([]RuntimeEaglePod, len(pods))
-		copy(snapshot, pods)
+		snapshot := make(map[string]RuntimeEaglePod)
+		for _, p := range pods {
+			snapshot[p.Container.Id] = p
+		}
 		pgCtrl.evSnapshot = snapshot
+		pgCtrl.cleanCorruptedContainers()
 	}
 	return false
 }
@@ -199,9 +202,7 @@ func (op pgOperRefreshInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 			}
 		} else {
 			log.Warnf("PodGroupCtrl %s, we found pod missing, just redeploy it", op.spec)
-			//pod missing usually happended when agent was down, so no need to notify app users
-			// ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name,
-			// 	op.instanceNo, container.Runtime.State.FinishedAt, NotifyPodMissing))
+			// pod missing usually happended when agent was down, so no need to notify app owner
 			newPodSpec := podCtrl.spec.Clone()
 			prevNodeName := newPodSpec.PrevState.NodeName
 			if newPodSpec.IsHardStateful() {
@@ -214,6 +215,8 @@ func (op pgOperRefreshInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 			}
 			podCtrl.spec = newPodSpec
 			podCtrl.pod.State = RunStatePending
+			// when found pod down and redeploy it we just regard it as a drift operation and make driftcount incr
+			podCtrl.pod.DriftCount += 1
 			op := pgOperDeployInstance{op.instanceNo, op.spec.Version}
 			op.Do(pgCtrl, c, store, ev)
 			runtime = podCtrl.pod.ImRuntime
@@ -288,6 +291,13 @@ type pgOperDeployInstance struct {
 	version    int
 }
 
+/*
+ *  Deploy is happend when deployding, scheduling, foundMissing
+ *  1. check if current pod is deployd in cluster
+ *  2. if deployed, check if corrupted, if corrupted try recover it
+ *  3. if not deployed, just deploy it with driftcount+1
+ *
+ */
 func (op pgOperDeployInstance) Do(pgCtrl *podGroupController, c cluster.Cluster, store storage.Store, ev *RuntimeEagleView) bool {
 	var runtime ImRuntime
 	start := time.Now()
@@ -465,6 +475,27 @@ func (op pgOperPurge) Do(pgCtrl *podGroupController, c cluster.Cluster, store st
 	return true // to shutdown the worker routine
 }
 
+// generally used to remove corrupted containers
+// type pgOperRemoveCorruptedContainer struct {
+// 	ids []string
+// }
+
+// func (op pgOperRemoveCorruptedContainer) Do(pgCtrl *podGroupController, c cluster.Cluster, store storage.Store, ev *RuntimeEagleView) bool {
+// 	start := time.Now()
+// 	defer func() {
+// 		pgCtrl.RLock()
+// 		log.Infof("%s remove containers: , op=%+v, duration=%s", pgCtrl, op, time.Now().Sub(start))
+// 		pgCtrl.RUnlock()
+// 	}()
+// 	for _, cId := range ids {
+// 		log.Warnf("%s  find some corrupted container alive, try to remove it", pgCtrl)
+// 		if err := c.RemoveContainer(cId, true, false); err != nil {
+// 			log.Warnf("%s still cannot remove the container ", pgCtrl)
+// 		}
+// 	}
+// 	return true // to shutdown the worker routine
+// }
+
 type pgOperPushPodCtrl struct {
 	spec PodSpec
 }
@@ -553,9 +584,7 @@ func (op pgOperChangeState) Do(pgCtrl *podGroupController, c cluster.Cluster, st
 	case "stop":
 		podCtrl.Stop(c)
 		if podCtrl.pod.State != RunStateFail {
-			log.Infof("ExpectStateStop:%v", ExpectStateStop)
 			podCtrl.pod.ChangeTargetState(ExpectStateStop)
-			log.Infof("podCtrl.pod.TargetState:%v", podCtrl.pod.TargetState)
 		}
 	case "restart":
 		pgCtrl.waitLastPodHealthy(op.instance - 1)

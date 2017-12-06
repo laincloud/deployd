@@ -351,7 +351,6 @@ func savePodStaHstry(engine *OrcEngine, event *adoc.Event) {
 				podStatuses[instance] = psh
 				egStatuses.pgStatuses[podname] = &PodGroupStatusHistory{podStatuses}
 			}
-			log.Infof("events:%v ", egStatuses.pgStatuses[podname].podStatuses[instance])
 			egStatuses.pgStatuses[podname].podStatuses[instance].Save(engine)
 		}
 	}

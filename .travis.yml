@@ -21,9 +21,9 @@ before_script:
 - nohup ./etcd-v2.3.7-linux-amd64/etcd --listen-client-urls=http://$ip:2379,http://localhost:2379 --advertise-client-urls=http://$ip:2379 &
 - cat /lib/systemd/system/docker.service
 - docker network create hello
-- docker pull swarm:1.2.5
-- docker run -d --name swarm-manage.service -p 2376:2375 swarm:1.2.5 manage --replication --addr=$ip:2376 etcd://$ip:2379/lain/swarm
-- docker run -d --name swarm-agent.service swarm:1.2.5 join --addr=$ip:2375 etcd://$ip:2379/lain/swarm
+- docker pull swarm:1.2.8
+- docker run -d --name swarm-manage.service -p 2376:2375 swarm:1.2.8 manage --replication --addr=$ip:2376 etcd://$ip:2379/lain/swarm
+- docker run -d --name swarm-agent.service swarm:1.2.8 join --addr=$ip:2375 etcd://$ip:2379/lain/swarm
 - docker ps -a 
 - docker -H :2376 info
 script:
