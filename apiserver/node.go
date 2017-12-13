@@ -52,3 +52,17 @@ func (rn RestfulNodes) Patch(ctx context.Context, r *http.Request) (int, interfa
 		return http.StatusBadRequest, fmt.Sprintf("Unkown command %s", cmd)
 	}
 }
+
+func (rn RestfulNodes) Delete(ctx context.Context, r *http.Request) (int, interface{}) {
+	node := form.ParamString(r, "node", "")
+
+	if node == "" {
+		return http.StatusBadRequest, "from node name required"
+	}
+	engine := getEngine(ctx)
+	engine.RemoveNode(node)
+	return http.StatusAccepted, map[string]interface{}{
+		"message": "containers in node will be drift",
+		"node":    node,
+	}
+}
