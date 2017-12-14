@@ -90,7 +90,9 @@ func handleContainerEvent(engine *OrcEngine, event *adoc.Event) {
 				pgCtrl, ok := engine.pgCtrls[podName]
 				if ok {
 					if len(pgCtrl.podCtrls) >= instance {
+						pgCtrl.Lock()
 						pgCtrl.podCtrls[instance-1].pod.Healthst = status
+						pgCtrl.Unlock()
 						pgCtrl.opsChan <- pgOperSnapshotGroup{true}
 						pgCtrl.opsChan <- pgOperSaveStore{true}
 					}

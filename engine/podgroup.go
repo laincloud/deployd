@@ -34,8 +34,11 @@ type podGroupController struct {
 	podCtrls   []*podController
 	opsChan    chan pgOperation
 
-	storedKey    string
-	storedKeyDir string
+	refreshable bool
+
+	lastPodSpecKey string
+	storedKey      string
+	storedKeyDir   string
 }
 
 func (pgCtrl *podGroupController) String() string {
@@ -50,6 +53,18 @@ func (pgCtrl *podGroupController) CanOperate(pgops PGOpState) PGOpState {
 		return PGOpStateIdle
 	}
 	return pgCtrl.opState
+}
+
+func (pgCtrl *podGroupController) DisableRefresh() {
+	pgCtrl.Lock()
+	defer pgCtrl.Unlock()
+	pgCtrl.refreshable = false
+}
+
+func (pgCtrl *podGroupController) EnableRefresh() {
+	pgCtrl.Lock()
+	defer pgCtrl.Unlock()
+	pgCtrl.refreshable = true
 }
 
 // called by signle goroutine
@@ -111,6 +126,7 @@ func (pgCtrl *podGroupController) Deploy() {
 	pgCtrl.opsChan <- pgOperSnapshotPrevState{}
 	pgCtrl.opsChan <- pgOperSaveStore{true}
 	pgCtrl.opsChan <- pgOperLogOperation{"deploy finished"}
+	pgCtrl.opsChan <- pgOperOver{}
 }
 
 func (pgCtrl *podGroupController) RescheduleInstance(numInstances int, restartPolicy ...RestartPolicy) {
@@ -173,6 +189,9 @@ func (pgCtrl *podGroupController) RescheduleSpec(podSpec PodSpec) {
 	if ok := pgCtrl.updatePodPorts(podSpec); !ok {
 		return
 	}
+	// store oldPodSpec for rollback(with ttl 10min)
+	pgCtrl.opsChan <- pgOperCacheLastSpec{spec: spec}
+
 	oldPodSpec := spec.Pod.Clone()
 	spec.Pod = spec.Pod.Merge(podSpec)
 	spec.Version += 1
@@ -284,6 +303,38 @@ func (pgCtrl *podGroupController) Activate(c cluster.Cluster, store storage.Stor
 			}
 		}
 	}()
+}
+
+/*
+ * clean all ops in chan synchronously
+ *
+ */
+func (pgCtrl *podGroupController) FlushAllOps() {
+	for {
+		if len(pgCtrl.opsChan) == 0 {
+			return
+		}
+		select {
+		case <-pgCtrl.opsChan:
+		default:
+			return
+		}
+	}
+}
+
+func (pgCtrl *podGroupController) LastSpec() *PodGroupSpec {
+	log.Infof("Fetch LastPodSpec !")
+	var lastSpec PodGroupSpec
+	if err := pgCtrl.engine.store.Get(pgCtrl.lastPodSpecKey, &lastSpec); err != nil {
+		log.Infof("Fetch LastPodSpec with err:%v", err)
+		return nil
+	}
+	log.Infof("Fetch LastPodSpec :%v", lastSpec)
+	return &lastSpec
+}
+
+func (pgCtrl *podGroupController) checkUpgradeResult() {
+
 }
 
 /*
@@ -484,9 +535,10 @@ func (pgCtrl *podGroupController) updatePodPorts(podSpec PodSpec) bool {
 	return true
 }
 
-func (pgCtrl *podGroupController) waitLastPodHealthy(i int) {
+func (pgCtrl *podGroupController) waitLastPodHealth(i int) bool {
+	retries := 5
+	retryTimes := 0
 	if i > 0 {
-		retries := 5
 		sleepTime := DefaultSetUpTime
 		podSpec := pgCtrl.spec.Pod
 		if podSpec.GetSetupTime() > DefaultSetUpTime {
@@ -496,7 +548,6 @@ func (pgCtrl *podGroupController) waitLastPodHealthy(i int) {
 		if pgCtrl.podCtrls[i].pod.Healthst == HealthStateNone {
 			time.Sleep(time.Second * time.Duration(podSpec.GetSetupTime()))
 		} else {
-			retryTimes := 0
 			for {
 				if retryTimes == retries {
 					break
@@ -510,12 +561,14 @@ func (pgCtrl *podGroupController) waitLastPodHealthy(i int) {
 			}
 		}
 	}
-	// if i == 1 && retryTimes == retries {
-	// 	//rollback
-	// }
+	// reset health state to starting
 	if pgCtrl.podCtrls[i].pod.Healthst != HealthStateNone {
 		pgCtrl.podCtrls[i].pod.Healthst = HealthStateStarting
 	}
+	if retryTimes == retries && pgCtrl.podCtrls[i-1].pod.Healthst != HealthStateHealthy {
+		return false
+	}
+	return true
 }
 
 func (pgCtrl *podGroupController) emptyError() {
@@ -558,8 +611,11 @@ func newPodGroupController(spec PodGroupSpec, states []PodPrevState, pg PodGroup
 		podCtrls: podCtrls,
 		opsChan:  make(chan pgOperation, 500),
 
-		storedKey:    strings.Join([]string{kLainDeploydRootKey, kLainPodGroupKey, spec.Namespace, spec.Name}, "/"),
-		storedKeyDir: strings.Join([]string{kLainDeploydRootKey, kLainPodGroupKey, spec.Namespace}, "/"),
+		refreshable: true,
+
+		lastPodSpecKey: strings.Join([]string{kLainDeploydRootKey, kLainLastPodSpecKey, spec.Namespace, spec.Name}, "/"),
+		storedKey:      strings.Join([]string{kLainDeploydRootKey, kLainPodGroupKey, spec.Namespace, spec.Name}, "/"),
+		storedKeyDir:   strings.Join([]string{kLainDeploydRootKey, kLainPodGroupKey, spec.Namespace}, "/"),
 	}
 	pgCtrl.Publisher = NewPublisher(true)
 	return pgCtrl

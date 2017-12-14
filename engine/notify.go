@@ -24,6 +24,8 @@ var (
 	NotifyPodUnHealthy = "LAIN found pod Unhealthy, please check your service"
 
 	NotifyClusterUnHealthy = "LAIN found Cluster Manager Unhealthy, please check your cluster"
+
+	NotifyUpgradeFailedTmplt = "LAIN found Last version:%d upgrade is terrrible, please check your code carefully!!"
 )
 
 type notifyController struct {

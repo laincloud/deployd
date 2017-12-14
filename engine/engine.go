@@ -495,14 +495,19 @@ func (engine *OrcEngine) initOperationWorker() {
 				rInterval := RefreshInterval / 2 * 1000 / len(engine.pgCtrls)
 				index := 0
 				for _, pgCtrl := range engine.pgCtrls {
-					interval := index * rInterval
-					_pgCtrl := pgCtrl
-					index++
-					go func() {
-						log.Infof("%s will be refreshed after %d seconds", _pgCtrl, interval/1000)
-						time.Sleep(time.Duration(interval) * time.Millisecond)
-						engine.opsChan <- orcOperRefresh{_pgCtrl, false}
-					}()
+					pgCtrl.RLock()
+					refreshable := pgCtrl.refreshable
+					pgCtrl.RUnlock()
+					if refreshable {
+						interval := index * rInterval
+						_pgCtrl := pgCtrl
+						index++
+						go func() {
+							log.Infof("%s will be refreshed after %d seconds", _pgCtrl, interval/1000)
+							time.Sleep(time.Duration(interval) * time.Millisecond)
+							engine.opsChan <- orcOperRefresh{_pgCtrl, false}
+						}()
+					}
 				}
 			}
 			if len(engine.dependsCtrls) > 0 {
