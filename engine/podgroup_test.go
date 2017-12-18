@@ -12,6 +12,18 @@ import (
 	"github.com/laincloud/deployd/storage/etcd"
 )
 
+func TestContainerSorter(t *testing.T) {
+	containers := []*container{
+		&container{version: 1, instance: 1, driftCount: 1},
+		&container{version: 2, instance: 1, driftCount: 1},
+		&container{version: 1, instance: 1, driftCount: 2},
+		&container{version: 3, instance: 1, driftCount: 1}}
+	By(ByVersionAndDriftCounter).Sort(containers)
+	for _, container := range containers {
+		fmt.Println(container)
+	}
+}
+
 func TestPodGroupRefresh(t *testing.T) {
 	etcdAddr := "http://127.0.0.1:2379"
 	ConfigPortsManager(etcdAddr)

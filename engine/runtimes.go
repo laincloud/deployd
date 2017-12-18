@@ -238,7 +238,7 @@ func (pod Pod) NodeIp() string {
 
 func (pod Pod) PodIp() string {
 	if len(pod.Containers) > 0 {
-		return pod.Containers[0].NodeIp
+		return pod.Containers[0].ContainerIp
 	}
 	return ""
 }

@@ -3,14 +3,16 @@ package apiserver
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"time"
+
 	"github.com/laincloud/deployd/cluster/swarm"
 	"github.com/laincloud/deployd/engine"
+	"github.com/laincloud/deployd/network"
 	setcd "github.com/laincloud/deployd/storage/etcd"
 	"github.com/mijia/sweb/log"
 	"github.com/mijia/sweb/server"
 	"golang.org/x/net/context"
-	"net/http"
-	"time"
 )
 
 type UrlReverser interface {
@@ -35,6 +37,9 @@ func (s *Server) ListenAndServe(addr string) error {
 		return err
 	}
 	s.engine = orcEngine
+
+	// init network manager for net recover
+	initNetwWorkMgr(s.etcdAddress)
 
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, "engine", orcEngine)
@@ -179,7 +184,12 @@ func initOrcEngine(swarmAddr string, etcdAddr string, isDebug bool) (*engine.Orc
 	if err != nil {
 		return nil, err
 	}
+
 	return engine.New(cluster, store)
+}
+
+func initNetwWorkMgr(endpoint string) {
+	network.InitNetWorkManager("calico", endpoint)
 }
 
 func New(swarmAddr, etcdAddr string, isDebug bool) *Server {

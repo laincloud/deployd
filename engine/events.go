@@ -90,7 +90,9 @@ func handleContainerEvent(engine *OrcEngine, event *adoc.Event) {
 				pgCtrl, ok := engine.pgCtrls[podName]
 				if ok {
 					if len(pgCtrl.podCtrls) >= instance {
+						pgCtrl.Lock()
 						pgCtrl.podCtrls[instance-1].pod.Healthst = status
+						pgCtrl.Unlock()
 						pgCtrl.opsChan <- pgOperSnapshotGroup{true}
 						pgCtrl.opsChan <- pgOperSaveStore{true}
 					}
@@ -351,7 +353,6 @@ func savePodStaHstry(engine *OrcEngine, event *adoc.Event) {
 				podStatuses[instance] = psh
 				egStatuses.pgStatuses[podname] = &PodGroupStatusHistory{podStatuses}
 			}
-			log.Infof("events:%v ", egStatuses.pgStatuses[podname].podStatuses[instance])
 			egStatuses.pgStatuses[podname].podStatuses[instance].Save(engine)
 		}
 	}

@@ -18,6 +18,7 @@ const (
 	kLainSpecKey        = "specs"
 	kLainPodKey         = "pods"
 	kLainNodesKey       = "nodes"
+	kLainLastPodSpecKey = "last_spec"
 
 	kLainVolumeRoot      = "/data/lain/volumes"
 	kLainCloudVolumeRoot = "/data/lain/cloud-volumes"

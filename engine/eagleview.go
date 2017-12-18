@@ -28,7 +28,7 @@ func (pod RuntimeEaglePod) String() string {
 
 type RuntimeEagleView struct {
 	sync.RWMutex
-	podGroups map[string][]RuntimeEaglePod
+	podGroups map[string][]RuntimeEaglePod // pgname => podGroups
 }
 
 func (ev *RuntimeEagleView) GetRuntimeEaglePods(name string) ([]RuntimeEaglePod, bool) {

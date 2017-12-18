@@ -221,8 +221,10 @@ func (op depOperSnapshotEagleView) Do(depCtrl *dependsController, c cluster.Clus
 	if pods, err := ev.RefreshPodsByNamespace(c, op.spec.Name); err != nil {
 		_err = err
 	} else {
-		snapshot := make([]RuntimeEaglePod, len(pods))
-		copy(snapshot, pods)
+		snapshot := make(map[string]RuntimeEaglePod)
+		for _, p := range pods {
+			snapshot[p.Container.Id] = p
+		}
 		depCtrl.evSnapshot = snapshot
 	}
 	return false

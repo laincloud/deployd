@@ -1,6 +1,8 @@
 package storage
 
-import "errors"
+import (
+	"errors"
+)
 
 var (
 	KMissingError    = errors.New("No such key")
@@ -12,6 +14,7 @@ var (
 type Store interface {
 	Get(key string, v interface{}) error
 	Set(key string, v interface{}, force ...bool) error
+	SetWithTTL(key string, v interface{}, ttlSec int, force ...bool) error
 	Watch(key string) chan string
 	KeysByPrefix(prefix string) ([]string, error)
 	Remove(key string) error

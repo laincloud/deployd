@@ -21,6 +21,8 @@ const (
 	EtcdGuardSwitchKey = "/lain/config/guardswitch"
 
 	EtcdConfigKey = "/lain/deployd/engine/config"
+
+	DefaultLastSpecCacheTTL = 10 * 60 // 10min
 )
 
 var (

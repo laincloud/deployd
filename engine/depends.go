@@ -45,7 +45,7 @@ type dependsController struct {
 	removeStatus int
 
 	Publisher
-	evSnapshot    []RuntimeEaglePod
+	evSnapshot    map[string]RuntimeEaglePod // id => RuntimeEaglePod
 	opsChan       chan depOperation
 	startedAt     time.Time
 	specStoredKey string

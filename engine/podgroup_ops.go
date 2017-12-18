@@ -19,6 +19,25 @@ type pgOperSaveStore struct {
 	force bool
 }
 
+type pgOperCacheLastSpec struct {
+	spec PodGroupSpec
+}
+
+func (op pgOperCacheLastSpec) Do(pgCtrl *podGroupController, c cluster.Cluster, store storage.Store, ev *RuntimeEagleView) bool {
+	var _err error
+	start := time.Now()
+	defer func() {
+		pgCtrl.RLock()
+		log.Infof("%s save last pod spec info, op=%+v, err=%v, duration=%s", pgCtrl, op, _err, time.Now().Sub(start))
+		pgCtrl.RUnlock()
+	}()
+	if err := store.SetWithTTL(pgCtrl.lastPodSpecKey, op.spec, DefaultLastSpecCacheTTL, true); err != nil {
+		log.Warnf("[Store] Failed to save last pod spec %s, %s", pgCtrl.lastPodSpecKey, err)
+		_err = err
+	}
+	return false
+}
+
 func (op pgOperSaveStore) Do(pgCtrl *podGroupController, c cluster.Cluster, store storage.Store, ev *RuntimeEagleView) bool {
 	var _err error
 	start := time.Now()
@@ -73,9 +92,12 @@ func (op pgOperSnapshotEagleView) Do(pgCtrl *podGroupController, c cluster.Clust
 	if pods, err := ev.RefreshPodGroup(c, op.pgName); err != nil {
 		_err = err
 	} else {
-		snapshot := make([]RuntimeEaglePod, len(pods))
-		copy(snapshot, pods)
+		snapshot := make(map[string]RuntimeEaglePod)
+		for _, p := range pods {
+			snapshot[p.Container.Id] = p
+		}
 		pgCtrl.evSnapshot = snapshot
+		pgCtrl.cleanCorruptedContainers()
 	}
 	return false
 }
@@ -100,8 +122,46 @@ func (op pgOperUpgradeInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 	newPodSpec.PrevState = podCtrl.spec.PrevState.Clone() // upgrade action, state should not changed
 	prevNodeName := newPodSpec.PrevState.NodeName
 
-	pgCtrl.waitLastPodHealthy(op.instanceNo - 1)
+	if !pgCtrl.waitLastPodHealth(op.instanceNo-1) && op.instanceNo == 2 {
+		// current upgrade is terrible so make this upgrade over and role back
+		// if old podspec version cached do version roll back else do nothing and ugrade anyway
+		log.Infof("upgrade Failed!")
+		lastSpec := pgCtrl.LastSpec()
+		if lastSpec != nil {
+			// 1. disable refresh(so no others can produce operation) and flush ops chan
+			log.Infof("Start Rollback!")
+			pgCtrl.DisableRefresh()
+			pgCtrl.FlushAllOps()
+			// 2. rollback podgroup podspec info
+			pgCtrl.RLock()
+			spec := pgCtrl.spec.Clone()
+			pgCtrl.RUnlock()
+			pgCtrl.Lock()
+			pgCtrl.spec = *lastSpec
+			pgCtrl.Unlock()
+			// 3. rollback instance 1
+			pgCtrl.opsChan <- pgOperUpgradeInstance{1, spec.Version, spec.Pod, lastSpec.Pod}
+			// 4. return error
+			pgCtrl.Lock()
+			pgCtrl.group.LastError = fmt.Sprintf("Your Last upgrade is terrrible, so we won't upgrade it, please check your code carefully!!")
+			pgCtrl.Unlock()
+			pgCtrl.opsChan <- pgOperSnapshotGroup{true}
+			pgCtrl.opsChan <- pgOperSaveStore{true}
+			// 5. enable refresh
+			pgCtrl.EnableRefresh()
+			// 6. op over
+			pgCtrl.opsChan <- pgOperOver{}
+			// 7. notify
+			ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name,
+					1, time.Now(), fmt.Sprintf(NotifyUpgradeFailedTmplt, spec.Version) ))
+			log.Infof("Rollback Over!")
+			return false
+		} else {
+			log.Infof("No last spec info found, do nothing and upgrade anyway!")
+		}
+	}
 
+	log.Infof("upgrade instance :%d!", op.instanceNo)
 	var lowOp pgOperation
 	lowOp = pgOperRemoveInstance{op.instanceNo, op.oldPodSpec}
 	lowOp.Do(pgCtrl, c, store, ev)
@@ -199,9 +259,7 @@ func (op pgOperRefreshInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 			}
 		} else {
 			log.Warnf("PodGroupCtrl %s, we found pod missing, just redeploy it", op.spec)
-			//pod missing usually happended when agent was down, so no need to notify app users
-			// ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name,
-			// 	op.instanceNo, container.Runtime.State.FinishedAt, NotifyPodMissing))
+			// pod missing usually happended when agent was down, so no need to notify app owner
 			newPodSpec := podCtrl.spec.Clone()
 			prevNodeName := newPodSpec.PrevState.NodeName
 			if newPodSpec.IsHardStateful() {
@@ -214,6 +272,8 @@ func (op pgOperRefreshInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 			}
 			podCtrl.spec = newPodSpec
 			podCtrl.pod.State = RunStatePending
+			// when found pod down and redeploy it we just regard it as a drift operation and make driftcount incr
+			podCtrl.pod.DriftCount += 1
 			op := pgOperDeployInstance{op.instanceNo, op.spec.Version}
 			op.Do(pgCtrl, c, store, ev)
 			runtime = podCtrl.pod.ImRuntime
@@ -288,6 +348,13 @@ type pgOperDeployInstance struct {
 	version    int
 }
 
+/*
+ *  Deploy is happend when deployding, scheduling, foundMissing
+ *  1. check if current pod is deployd in cluster
+ *  2. if deployed, check if corrupted, if corrupted try recover it
+ *  3. if not deployed, just deploy it with driftcount+1
+ *
+ */
 func (op pgOperDeployInstance) Do(pgCtrl *podGroupController, c cluster.Cluster, store storage.Store, ev *RuntimeEagleView) bool {
 	var runtime ImRuntime
 	start := time.Now()
@@ -405,7 +472,7 @@ func (op pgOperDriftInstance) Do(pgCtrl *podGroupController, c cluster.Cluster, 
 	oldSpec, oldPod := podCtrl.spec.Clone(), podCtrl.pod
 	oldNodeName := oldPod.NodeName()
 
-	pgCtrl.waitLastPodHealthy(op.instanceNo - 1)
+	pgCtrl.waitLastPodHealth(op.instanceNo - 1)
 
 	isDrifted = podCtrl.Drift(c, op.fromNode, op.toNode, op.force)
 	runtime = podCtrl.pod.ImRuntime
@@ -553,12 +620,10 @@ func (op pgOperChangeState) Do(pgCtrl *podGroupController, c cluster.Cluster, st
 	case "stop":
 		podCtrl.Stop(c)
 		if podCtrl.pod.State != RunStateFail {
-			log.Infof("ExpectStateStop:%v", ExpectStateStop)
 			podCtrl.pod.ChangeTargetState(ExpectStateStop)
-			log.Infof("podCtrl.pod.TargetState:%v", podCtrl.pod.TargetState)
 		}
 	case "restart":
-		pgCtrl.waitLastPodHealthy(op.instance - 1)
+		pgCtrl.waitLastPodHealth(op.instance - 1)
 		podCtrl.Restart(c)
 		if podCtrl.pod.State != RunStateFail {
 			podCtrl.pod.ChangeTargetState(ExpectStateRun)

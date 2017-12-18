@@ -86,6 +86,10 @@ func (store *EtcdStore) KeysByPrefix(prefix string) ([]string, error) {
 }
 
 func (store *EtcdStore) Set(key string, v interface{}, force ...bool) error {
+	return store.SetWithTTL(key, v, -1, force...)
+}
+
+func (store *EtcdStore) SetWithTTL(key string, v interface{}, ttlSec int, force ...bool) error {
 	if data, err := json.Marshal(v); err != nil {
 		return err
 	} else {
@@ -104,7 +108,11 @@ func (store *EtcdStore) Set(key string, v interface{}, force ...bool) error {
 				return nil
 			}
 		}
-		_, err := store.keysApi.Set(store.ctx, key, string(data), nil)
+		var setOpts *client.SetOptions
+		if ttlSec > 0 {
+			setOpts = &client.SetOptions{TTL: time.Duration(ttlSec) * time.Second}
+		}
+		_, err := store.keysApi.Set(store.ctx, key, string(data), setOpts)
 		if err == nil {
 			store.keyHashes[key] = dataHash
 		}
