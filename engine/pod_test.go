@@ -68,7 +68,7 @@ func TestPodController(t *testing.T) {
 	}
 
 	pc.Stop(c)
-	if pc.pod.State != RunStateFail {
+	if pc.pod.State != RunStateExit {
 		t.Fatal("The pod should be stopped and exited")
 	}
 
