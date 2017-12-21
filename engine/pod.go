@@ -366,11 +366,11 @@ func (pc *podController) refreshContainer(kluster cluster.Cluster, index int) {
 		state := info.State
 		pc.pod.OOMkilled = state.OOMKilled
 		if !state.Running {
-			if state.ExitCode == 2 {
-				pc.pod.State = RunStateExit
-			} else {
+			if state.Error != "" {
 				pc.pod.State = RunStateFail
 				pc.pod.LastError = state.Error
+			} else {
+				pc.pod.State = RunStateExit
 			}
 		}
 		health := state.Health

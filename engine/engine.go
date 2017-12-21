@@ -274,6 +274,7 @@ func (engine *OrcEngine) RescheduleSpec(name string, podSpec PodSpec) error {
 			pgCtrl.Unlock()
 			log.Info("No resources available to scheduler container")
 			pgCtrl.opsChan <- pgOperSaveStore{true}
+			pgCtrl.opsChan <- pgOperOver{}
 		}
 
 		return nil
@@ -528,9 +529,7 @@ func (engine *OrcEngine) initOperationWorker() {
 		case <-portsTick:
 			RefreshPorts(engine.pgCtrls)
 		case <-engine.stop:
-			if len(engine.opsChan) == 0 {
-				return
-			}
+			return
 		}
 	}
 }
