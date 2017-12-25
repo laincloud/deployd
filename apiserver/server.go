@@ -166,6 +166,7 @@ func (s *Server) Shutdown() {
 	}
 	if s.engine != nil {
 		s.engine.Stop()
+		s.engine = nil
 	}
 }
 
@@ -180,7 +181,7 @@ func initOrcEngine(swarmAddr string, etcdAddr string, isDebug bool) (*engine.Orc
 		return nil, err
 	}
 
-	cluster, err := swarm.NewCluster(swarmAddr, 30*time.Second, 10*time.Minute)
+	cluster, err := swarm.NewCluster(swarmAddr, 30*time.Second, 90*time.Second)
 	if err != nil {
 		return nil, err
 	}

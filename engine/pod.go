@@ -78,9 +78,7 @@ func (pc *podController) Deploy(cluster cluster.Cluster) {
 		id, err := pc.createContainer(cluster, filters, i)
 		if err != nil {
 			log.Warnf("%s Cannot create container, error=%q, spec=%+v", pc, err, cSpec)
-			if !util.IsConnectionError(err) {
-				pc.pod.State = RunStateFail
-			}
+			pc.pod.State = RunStateFail
 			pc.pod.LastError = fmt.Sprintf("Cannot create container, %s", err)
 			return
 		}
@@ -179,9 +177,7 @@ func (pc *podController) Stop(cluster cluster.Cluster) {
 	for i, container := range pc.pod.Containers {
 		if err := cluster.StopContainer(container.Id, pc.spec.GetKillTimeout()); err != nil {
 			log.Warnf("%s Cannot stop the container %s, %s", pc, container.Id, err)
-			if !util.IsConnectionError(err) {
-				pc.pod.State = RunStateFail
-			}
+			pc.pod.State = RunStateFail
 			pc.pod.LastError = fmt.Sprintf("Cannot stop container, %s", err)
 		} else {
 			pc.refreshContainer(cluster, i)
@@ -204,6 +200,10 @@ func (pc *podController) Start(cluster cluster.Cluster) {
 	for i, container := range pc.pod.Containers {
 		if err := pc.startContainer(cluster, container.Id); err == nil {
 			pc.refreshContainer(cluster, i)
+		} else {
+			log.Warnf("%s Cannot start the container %s, %s", pc, container.Id, err)
+			pc.pod.State = RunStateFail
+			pc.pod.LastError = fmt.Sprintf("Cannot start container, %s", err)
 		}
 	}
 	pc.UpdateRestartInfo()
@@ -221,10 +221,8 @@ func (pc *podController) Restart(cluster cluster.Cluster) {
 	for i, container := range pc.pod.Containers {
 		if err := cluster.RestartContainer(container.Id, pc.spec.GetKillTimeout()); err != nil {
 			log.Warnf("%s Cannot restart the container %s, %s", pc, container.Id, err)
-			if !util.IsConnectionError(err) {
-				pc.pod.State = RunStateFail
-			}
-			pc.pod.LastError = fmt.Sprintf("Cannot start container, %s", err)
+			pc.pod.State = RunStateFail
+			pc.pod.LastError = fmt.Sprintf("Cannot restart container, %s", err)
 		} else {
 			pc.refreshContainer(cluster, i)
 		}
@@ -277,9 +275,7 @@ func (pc *podController) startContainer(cluster cluster.Cluster, id string) erro
 				log.Warnf("%s Cannot release IP %s, %s", pc, id, err)
 			}
 		}
-		if !util.IsConnectionError(err) {
-			pc.pod.State = RunStateFail
-		}
+		pc.pod.State = RunStateFail
 		pc.pod.LastError = fmt.Sprintf("Cannot start container, %s", err)
 		return err
 	}
@@ -323,26 +319,17 @@ func (pc *podController) refreshContainer(kluster cluster.Cluster, index int) {
 			pc.pod.LastError = fmt.Sprintf("Missing container %q, %s", id, err)
 		} else {
 			log.Warnf("%s Failed to inspect container %s, %s", pc, id, err)
-			if !util.IsConnectionError(err) {
-				pc.pod.State = RunStateFail
-			}
+			pc.pod.State = RunStateFail
 			pc.pod.LastError = fmt.Sprintf("Cannot inspect the container, %s", err)
 		}
 	} else {
+		// inspect pod successed
+
 		network := pc.spec.Network
 		if network == "" {
 			network = pc.spec.Namespace
 		}
 		prevIP, nowIP := pc.spec.PrevState.IPs[index], info.NetworkSettings.Networks[network].IPAddress
-		// NOTE: if the container's ip is not equal to prev ip, try to correct it; if failed, accpet new ip
-		if prevIP != "" && prevIP != nowIP {
-			log.Warnf("%s find the IP changed, prev is %s, but now is %s, try to correct it", pc, prevIP, nowIP)
-			if !pc.tryCorrectIPAddress(kluster, id, nowIP, prevIP) {
-				log.Warnf("%s fail to correct container ip to %s, accpet new ip %s.", pc, prevIP, nowIP)
-			} else {
-				nowIP = prevIP
-			}
-		}
 
 		container := Container{
 			Id:            id,
@@ -366,11 +353,11 @@ func (pc *podController) refreshContainer(kluster cluster.Cluster, index int) {
 		state := info.State
 		pc.pod.OOMkilled = state.OOMKilled
 		if !state.Running {
-			if state.ExitCode == 2 {
-				pc.pod.State = RunStateExit
-			} else {
+			if state.Error != "" {
 				pc.pod.State = RunStateFail
 				pc.pod.LastError = state.Error
+			} else {
+				pc.pod.State = RunStateExit
 			}
 		}
 		health := state.Health
@@ -387,6 +374,16 @@ func (pc *podController) refreshContainer(kluster cluster.Cluster, index int) {
 			}
 		} else {
 			pc.pod.Healthst = HealthState(HealthStateNone)
+		}
+		// if pod is running try correct ip
+		if state.Running && prevIP != "" && prevIP != nowIP {
+			// NOTE: if the container's ip is not equal to prev ip, try to correct it; if failed, accpet new ip
+			log.Warnf("%s find the IP changed, prev is %s, but now is %s, try to correct it", pc, prevIP, nowIP)
+			if !pc.tryCorrectIPAddress(kluster, id, nowIP, prevIP) {
+				log.Warnf("%s fail to correct container ip to %s, accpet new ip %s.", pc, prevIP, nowIP)
+			} else {
+				nowIP = prevIP
+			}
 		}
 	}
 }
