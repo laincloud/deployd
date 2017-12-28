@@ -153,7 +153,7 @@ func (op pgOperUpgradeInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 			pgCtrl.opsChan <- pgOperOver{}
 			// 7. notify
 			ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name,
-					1, time.Now(), fmt.Sprintf(NotifyUpgradeFailedTmplt, spec.Version) ))
+				1, time.Now(), fmt.Sprintf(NotifyUpgradeFailedTmplt, spec.Version)))
 			log.Infof("Rollback Over!")
 			return false
 		} else {
@@ -281,39 +281,40 @@ func (op pgOperRefreshInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 		return false
 	}
 
-	if (evVersion != -1 && op.spec.Version != evVersion) || podCtrl.spec.Version != op.spec.Version {
-		log.Warnf("PodGroupCtrl %s, we found pod running with lower version, just upgrade it", op.spec)
-		// the new spec should be in op.spec.Pod
-		op := pgOperUpgradeInstance{op.instanceNo, op.spec.Version, podCtrl.spec, op.spec.Pod}
-		op.Do(pgCtrl, c, store, ev)
-		runtime = podCtrl.pod.ImRuntime
-		return false
-	}
-	if !pgCtrl.engine.config.Maintenance && podCtrl.pod.NeedRestart(op.spec.RestartPolicy) {
-		if podCtrl.pod.RestartEnoughTimes() {
-			ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name,
-				op.instanceNo, container.Runtime.State.FinishedAt, NotifyLetPodGo))
+	if runtime.State == RunStateExit {
+		if (evVersion != -1 && op.spec.Version != evVersion) || podCtrl.spec.Version != op.spec.Version {
+			log.Warnf("PodGroupCtrl %s, we found pod running with lower version, just upgrade it", op.spec)
+			// the new spec should be in op.spec.Pod
+			op := pgOperUpgradeInstance{op.instanceNo, op.spec.Version, podCtrl.spec, op.spec.Pod}
+			op.Do(pgCtrl, c, store, ev)
+			runtime = podCtrl.pod.ImRuntime
 			return false
 		}
-		log.Warnf("PodGroupCtrl %s, we found pod down, just restart it", op.spec)
-		if podCtrl.pod.OOMkilled {
-			log.Errorf("pod down with oom:%v", op.spec)
-			ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name,
-				op.instanceNo, container.Runtime.State.FinishedAt, NotifyPodDownOOM))
-		} else {
-			ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name,
-				op.instanceNo, container.Runtime.State.FinishedAt, NotifyPodDown))
-		}
+		if !pgCtrl.engine.config.Maintenance && podCtrl.pod.NeedRestart(op.spec.RestartPolicy) {
+			if podCtrl.pod.RestartEnoughTimes() {
+				ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name,
+					op.instanceNo, container.Runtime.State.FinishedAt, NotifyLetPodGo))
+				return false
+			}
+			log.Warnf("PodGroupCtrl %s, we found pod down, just restart it", op.spec)
+			if podCtrl.pod.OOMkilled {
+				log.Errorf("pod down with oom:%v", op.spec)
+				ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name,
+					op.instanceNo, container.Runtime.State.FinishedAt, NotifyPodDownOOM))
+			} else {
+				ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name,
+					op.instanceNo, container.Runtime.State.FinishedAt, NotifyPodDown))
+			}
 
-		podCtrl.Start(c)
-		runtime = podCtrl.pod.ImRuntime
-		if runtime.State == RunStateSuccess {
-			pod := podCtrl.pod.Clone()
-			pgCtrl.emitChangeEvent("verify", podCtrl.spec, pod, pod.NodeName())
+			podCtrl.Start(c)
+			runtime = podCtrl.pod.ImRuntime
+			if runtime.State == RunStateSuccess {
+				pod := podCtrl.pod.Clone()
+				pgCtrl.emitChangeEvent("verify", podCtrl.spec, pod, pod.NodeName())
+			}
+			return false
 		}
-		return false
 	}
-
 	return false
 }
 
@@ -352,7 +353,7 @@ type pgOperDeployInstance struct {
  *  Deploy is happend when deployding, scheduling, foundMissing
  *  1. check if current pod is deployd in cluster
  *  2. if deployed, check if corrupted, if corrupted try recover it
- *  3. if not deployed, just deploy it with driftcount+1
+ *  3. if not deployed, just deploy it
  *
  */
 func (op pgOperDeployInstance) Do(pgCtrl *podGroupController, c cluster.Cluster, store storage.Store, ev *RuntimeEagleView) bool {
@@ -471,8 +472,6 @@ func (op pgOperDriftInstance) Do(pgCtrl *podGroupController, c cluster.Cluster, 
 	podCtrl := pgCtrl.podCtrls[op.instanceNo-1]
 	oldSpec, oldPod := podCtrl.spec.Clone(), podCtrl.pod
 	oldNodeName := oldPod.NodeName()
-
-	pgCtrl.waitLastPodHealth(op.instanceNo - 1)
 
 	isDrifted = podCtrl.Drift(c, op.fromNode, op.toNode, op.force)
 	runtime = podCtrl.pod.ImRuntime

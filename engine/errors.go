@@ -5,7 +5,7 @@ import (
 )
 
 var (
-	ErrOperLockedFormat = "Another operation \"%s\" is alerady existed"
+	ErrOperLockedFormat = "Another operation \"%s\" is progressing"
 )
 
 type LockedError interface {

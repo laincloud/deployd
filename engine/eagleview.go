@@ -47,8 +47,11 @@ func (ev *RuntimeEagleView) Refresh(c cluster.Cluster) error {
 	}()
 
 	labelFilter := []string{"com.docker.swarm.id"}
+	filters := map[string][]string{
+		"label": labelFilter,
+	}
 	podGroups := make(map[string][]RuntimeEaglePod)
-	err := ev.refreshCallback(c, labelFilter, func(pod RuntimeEaglePod) {
+	err := ev.refreshCallback(c, filters, func(pod RuntimeEaglePod) {
 		name := pod.Name
 		podGroups[name] = append(podGroups[name], pod)
 		totalContainers += 1
@@ -70,10 +73,10 @@ func (ev *RuntimeEagleView) RefreshPodGroup(c cluster.Cluster, pgName string) ([
 			pgName, totalContainers, time.Now().Sub(start))
 	}()
 
-	filters := []string{
+	labelFilters := []string{
 		fmt.Sprintf("%s.pg_name=%s", kLainLabelPrefix, pgName),
 	}
-	if pods, err := ev.refreshByFilters(c, filters); err == nil {
+	if pods, err := ev.filterByLabels(c, labelFilters); err == nil {
 		ev.Lock()
 		ev.podGroups[pgName] = pods
 		ev.Unlock()
@@ -94,27 +97,31 @@ func (ev *RuntimeEagleView) RefreshPodsByNamespace(c cluster.Cluster, namespace 
 			namespace, totalContainers, time.Now().Sub(start))
 	}()
 
-	filters := []string{
+	labelFilters := []string{
 		fmt.Sprintf("%s.pg_namespace=%s", kLainLabelPrefix, namespace),
+		"com.docker.swarm.id",
 	}
-	pods, err := ev.refreshByFilters(c, filters)
+	pods, err := ev.filterByLabels(c, labelFilters)
 	totalContainers = len(pods)
 	return pods, err
 }
 
-func (ev *RuntimeEagleView) refreshByFilters(c cluster.Cluster, labelFilters []string) ([]RuntimeEaglePod, error) {
-	labelFilters = append(labelFilters, "com.docker.swarm.id")
+func (ev *RuntimeEagleView) filterByLabels(c cluster.Cluster, labelFilters []string) ([]RuntimeEaglePod, error) {
+	filters := map[string][]string{
+		"label": labelFilters,
+	}
+	return ev.refreshByFilters(c, filters)
+}
+
+func (ev *RuntimeEagleView) refreshByFilters(c cluster.Cluster, filters map[string][]string) ([]RuntimeEaglePod, error) {
 	pods := make([]RuntimeEaglePod, 0, 10)
-	err := ev.refreshCallback(c, labelFilters, func(pod RuntimeEaglePod) {
+	err := ev.refreshCallback(c, filters, func(pod RuntimeEaglePod) {
 		pods = append(pods, pod)
 	})
 	return pods, err
 }
 
-func (ev *RuntimeEagleView) refreshCallback(c cluster.Cluster, labelFilter []string, callback func(RuntimeEaglePod)) error {
-	filters := map[string][]string{
-		"label": labelFilter,
-	}
+func (ev *RuntimeEagleView) refreshCallback(c cluster.Cluster, filters map[string][]string, callback func(RuntimeEaglePod)) error {
 	filterJson, err := json.Marshal(filters)
 	if err != nil {
 		log.Warnf("<RuntimeEagleView> Failed to encode the filter json, %s", err)
