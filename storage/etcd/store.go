@@ -122,7 +122,7 @@ func (store *EtcdStore) SetWithTTL(key string, v interface{}, ttlSec int, force 
 
 func (store *EtcdStore) Remove(key string) error {
 	_, err := store.keysApi.Delete(store.ctx, key, nil)
-	if err != nil {
+	if err == nil {
 		store.Lock()
 		delete(store.keyHashes, key)
 		store.Unlock()

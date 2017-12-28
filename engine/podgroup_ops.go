@@ -353,7 +353,7 @@ type pgOperDeployInstance struct {
  *  Deploy is happend when deployding, scheduling, foundMissing
  *  1. check if current pod is deployd in cluster
  *  2. if deployed, check if corrupted, if corrupted try recover it
- *  3. if not deployed, just deploy it with driftcount+1
+ *  3. if not deployed, just deploy it
  *
  */
 func (op pgOperDeployInstance) Do(pgCtrl *podGroupController, c cluster.Cluster, store storage.Store, ev *RuntimeEagleView) bool {
@@ -472,8 +472,6 @@ func (op pgOperDriftInstance) Do(pgCtrl *podGroupController, c cluster.Cluster, 
 	podCtrl := pgCtrl.podCtrls[op.instanceNo-1]
 	oldSpec, oldPod := podCtrl.spec.Clone(), podCtrl.pod
 	oldNodeName := oldPod.NodeName()
-
-	pgCtrl.waitLastPodHealth(op.instanceNo - 1)
 
 	isDrifted = podCtrl.Drift(c, op.fromNode, op.toNode, op.force)
 	runtime = podCtrl.pod.ImRuntime
