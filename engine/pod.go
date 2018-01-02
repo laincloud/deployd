@@ -324,12 +324,20 @@ func (pc *podController) refreshContainer(kluster cluster.Cluster, index int) {
 		}
 	} else {
 		// inspect pod successed
-
 		network := pc.spec.Network
 		if network == "" {
 			network = pc.spec.Namespace
 		}
 		prevIP, nowIP := pc.spec.PrevState.IPs[index], info.NetworkSettings.Networks[network].IPAddress
+		// NOTE: if the container's ip is not equal to prev ip, try to correct it; if failed, accpet new ip
+		if prevIP != "" && prevIP != nowIP {
+			log.Warnf("%s find the IP changed, prev is %s, but now is %s, try to correct it", pc, prevIP, nowIP)
+			if !pc.tryCorrectIPAddress(kluster, id, nowIP, prevIP) {
+				log.Warnf("%s fail to correct container ip to %s, accpet new ip %s.", pc, prevIP, nowIP)
+			} else {
+				nowIP = prevIP
+			}
+		}
 
 		container := Container{
 			Id:            id,
@@ -374,16 +382,6 @@ func (pc *podController) refreshContainer(kluster cluster.Cluster, index int) {
 			}
 		} else {
 			pc.pod.Healthst = HealthState(HealthStateNone)
-		}
-		// if pod is running try correct ip
-		if state.Running && prevIP != "" && prevIP != nowIP {
-			// NOTE: if the container's ip is not equal to prev ip, try to correct it; if failed, accpet new ip
-			log.Warnf("%s find the IP changed, prev is %s, but now is %s, try to correct it", pc, prevIP, nowIP)
-			if !pc.tryCorrectIPAddress(kluster, id, nowIP, prevIP) {
-				log.Warnf("%s fail to correct container ip to %s, accpet new ip %s.", pc, prevIP, nowIP)
-			} else {
-				nowIP = prevIP
-			}
 		}
 	}
 }

@@ -107,6 +107,9 @@ func (pgCtrl *podGroupController) IsPending() bool {
 }
 
 func (pgCtrl *podGroupController) Deploy() {
+	defer func() {
+		pgCtrl.opsChan <- pgOperOver{}
+	}()
 	pgCtrl.RLock()
 	spec := pgCtrl.spec.Clone()
 	pgCtrl.RUnlock()
@@ -126,10 +129,12 @@ func (pgCtrl *podGroupController) Deploy() {
 	pgCtrl.opsChan <- pgOperSnapshotPrevState{}
 	pgCtrl.opsChan <- pgOperSaveStore{true}
 	pgCtrl.opsChan <- pgOperLogOperation{"deploy finished"}
-	pgCtrl.opsChan <- pgOperOver{}
 }
 
 func (pgCtrl *podGroupController) RescheduleInstance(numInstances int, restartPolicy ...RestartPolicy) {
+	defer func() {
+		pgCtrl.opsChan <- pgOperOver{}
+	}()
 	pgCtrl.RLock()
 	spec := pgCtrl.spec.Clone()
 	pgCtrl.RUnlock()
@@ -174,10 +179,12 @@ func (pgCtrl *podGroupController) RescheduleInstance(numInstances int, restartPo
 		pgCtrl.opsChan <- pgOperSaveStore{true}
 	}
 	pgCtrl.opsChan <- pgOperLogOperation{"Reschedule instance number finished"}
-	pgCtrl.opsChan <- pgOperOver{}
 }
 
 func (pgCtrl *podGroupController) RescheduleSpec(podSpec PodSpec) {
+	defer func() {
+		pgCtrl.opsChan <- pgOperOver{}
+	}()
 	pgCtrl.RLock()
 	spec := pgCtrl.spec.Clone()
 	pgCtrl.RUnlock()
@@ -211,10 +218,12 @@ func (pgCtrl *podGroupController) RescheduleSpec(podSpec PodSpec) {
 	pgCtrl.opsChan <- pgOperSnapshotPrevState{}
 	pgCtrl.opsChan <- pgOperSaveStore{true}
 	pgCtrl.opsChan <- pgOperLogOperation{"Reschedule spec finished"}
-	pgCtrl.opsChan <- pgOperOver{}
 }
 
 func (pgCtrl *podGroupController) RescheduleDrift(fromNode, toNode string, instanceNo int, force bool) {
+	defer func() {
+		pgCtrl.opsChan <- pgOperOver{}
+	}()
 	pgCtrl.RLock()
 	spec := pgCtrl.spec.Clone()
 	pgCtrl.RUnlock()
@@ -233,10 +242,12 @@ func (pgCtrl *podGroupController) RescheduleDrift(fromNode, toNode string, insta
 	pgCtrl.opsChan <- pgOperSnapshotPrevState{}
 	pgCtrl.opsChan <- pgOperSaveStore{false}
 	pgCtrl.opsChan <- pgOperLogOperation{"Reschedule drift finished"}
-	pgCtrl.opsChan <- pgOperOver{}
 }
 
 func (pgCtrl *podGroupController) Remove() {
+	defer func() {
+		pgCtrl.opsChan <- pgOperOver{}
+	}()
 	pgCtrl.RLock()
 	spec := pgCtrl.spec.Clone()
 	pgCtrl.RUnlock()
@@ -249,7 +260,6 @@ func (pgCtrl *podGroupController) Remove() {
 	pgCtrl.opsChan <- pgOperLogOperation{"Remove finished"}
 	pgCtrl.opsChan <- pgOperSnapshotEagleView{spec.Name}
 	pgCtrl.opsChan <- pgOperPurge{}
-	pgCtrl.opsChan <- pgOperOver{}
 }
 
 func (pgCtrl *podGroupController) Refresh(force bool) {
@@ -272,6 +282,9 @@ func (pgCtrl *podGroupController) Refresh(force bool) {
 }
 
 func (pgCtrl *podGroupController) ChangeState(op string, instance int) {
+	defer func() {
+		pgCtrl.opsChan <- pgOperOver{}
+	}()
 	pgCtrl.RLock()
 	spec := pgCtrl.spec.Clone()
 	pgCtrl.RUnlock()
@@ -284,7 +297,6 @@ func (pgCtrl *podGroupController) ChangeState(op string, instance int) {
 	}
 	pgCtrl.opsChan <- pgOperSnapshotGroup{true}
 	pgCtrl.opsChan <- pgOperSaveStore{true}
-	pgCtrl.opsChan <- pgOperOver{}
 }
 
 func (pgCtrl *podGroupController) Activate(c cluster.Cluster, store storage.Store, eagle *RuntimeEagleView, stop chan struct{}) {
