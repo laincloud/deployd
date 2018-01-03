@@ -345,8 +345,45 @@ func (pgCtrl *podGroupController) LastSpec() *PodGroupSpec {
 	return &lastSpec
 }
 
-func (pgCtrl *podGroupController) checkUpgradeResult() {
-
+func (pgCtrl *podGroupController) shouldRollBack(isLastPodSHeathy bool, instanceNo int) bool {
+	if !isLastPodSHeathy && instanceNo == 2 {
+		// current upgrade is terrible so make this upgrade over and role back
+		// if old podspec version cached do version roll back else do nothing and ugrade anyway
+		log.Infof("upgrade Failed!")
+		lastSpec := pgCtrl.LastSpec()
+		if lastSpec != nil {
+			// 1. disable refresh(so no others can produce operation) and flush ops chan
+			log.Infof("Start Rollback!")
+			pgCtrl.DisableRefresh()
+			pgCtrl.FlushAllOps()
+			// 2. rollback podgroup podspec info
+			pgCtrl.Lock()
+			spec := pgCtrl.spec.Clone()
+			pgCtrl.spec = *lastSpec
+			pgCtrl.Unlock()
+			// 3. rollback instance 1
+			pgCtrl.opsChan <- pgOperUpgradeInstance{1, spec.Version, spec.Pod, lastSpec.Pod}
+			// 4. return error
+			pgCtrl.Lock()
+			pgCtrl.group.LastError = fmt.Sprintf("Your Last upgrade is terrrible, so we won't upgrade it, please check your code carefully!!")
+			pgCtrl.Unlock()
+			pgCtrl.opsChan <- pgOperSnapshotGroup{true}
+			pgCtrl.opsChan <- pgOperSaveStore{true}
+			// 5. enable refresh
+			pgCtrl.EnableRefresh()
+			// 6. op over
+			pgCtrl.opsChan <- pgOperOver{}
+			// 7. notify
+			podCtrl := pgCtrl.podCtrls[instanceNo-1]
+			ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name,
+				1, time.Now(), fmt.Sprintf(NotifyUpgradeFailedTmplt, spec.Version)))
+			log.Infof("Rollback Over!")
+			return true
+		} else {
+			log.Warn("No last spec info found, do nothing and upgrade anyway!")
+		}
+	}
+	return false
 }
 
 /*
@@ -552,7 +589,7 @@ func (pgCtrl *podGroupController) updatePodPorts(podSpec PodSpec) bool {
 }
 
 func (pgCtrl *podGroupController) waitLastPodHealth(i int) bool {
-	retries := 5
+	maxRetries := 5
 	retryTimes := 0
 	if i > 0 {
 		sleepTime := DefaultSetUpTime
@@ -565,7 +602,7 @@ func (pgCtrl *podGroupController) waitLastPodHealth(i int) bool {
 			time.Sleep(time.Second * time.Duration(podSpec.GetSetupTime()))
 		} else {
 			for {
-				if retryTimes == retries {
+				if retryTimes == maxRetries {
 					break
 				}
 				retryTimes++
@@ -581,7 +618,7 @@ func (pgCtrl *podGroupController) waitLastPodHealth(i int) bool {
 	if pgCtrl.podCtrls[i].pod.Healthst != HealthStateNone {
 		pgCtrl.podCtrls[i].pod.Healthst = HealthStateStarting
 	}
-	if retryTimes == retries && pgCtrl.podCtrls[i-1].pod.Healthst != HealthStateHealthy {
+	if retryTimes == maxRetries && pgCtrl.podCtrls[i-1].pod.Healthst != HealthStateHealthy {
 		return false
 	}
 	return true
