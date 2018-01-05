@@ -369,15 +369,13 @@ func (pc *podController) refreshContainer(kluster cluster.Cluster, index int) {
 			}
 		}
 		health := state.Health
-		options := pc.spec.HealthConfig.FetchOption()
-		checkedPoint := (options.Interval + options.Timeout) * options.Retries
-		if health != nil && time.Now().After(state.StartedAt.Add(
-			time.Second*time.Duration(checkedPoint))) {
+		if health != nil {
 			if health.Status == HealthState(HealthStateStarting).String() {
 				pc.pod.Healthst = HealthState(HealthStateStarting)
 			} else if health.Status == HealthState(HealthStateHealthy).String() {
 				pc.pod.Healthst = HealthState(HealthStateHealthy)
 			} else {
+				// Make sure checked enough times
 				pc.pod.Healthst = HealthState(HealthStateUnHealthy)
 			}
 		} else {

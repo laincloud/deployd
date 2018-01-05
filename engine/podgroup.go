@@ -345,8 +345,8 @@ func (pgCtrl *podGroupController) LastSpec() *PodGroupSpec {
 	return &lastSpec
 }
 
-func (pgCtrl *podGroupController) shouldRollBack(isLastPodSHeathy bool, instanceNo int) bool {
-	if !isLastPodSHeathy && instanceNo == 2 {
+func (pgCtrl *podGroupController) shouldRollBack(isLastPodHealthy bool, instanceNo int) bool {
+	if !isLastPodHealthy && instanceNo == 2 {
 		// current upgrade is terrible so make this upgrade over and role back
 		// if old podspec version cached do version roll back else do nothing and ugrade anyway
 		log.Infof("upgrade Failed!")
@@ -598,7 +598,7 @@ func (pgCtrl *podGroupController) waitLastPodHealth(i int) bool {
 			sleepTime = podSpec.GetSetupTime()
 		}
 		// wait some seconds for new instance's initialization completed, before we update next one
-		if pgCtrl.podCtrls[i].pod.Healthst == HealthStateNone {
+		if pgCtrl.podCtrls[i-1].pod.Healthst == HealthStateNone {
 			time.Sleep(time.Second * time.Duration(podSpec.GetSetupTime()))
 		} else {
 			for {
@@ -607,6 +607,9 @@ func (pgCtrl *podGroupController) waitLastPodHealth(i int) bool {
 				}
 				retryTimes++
 				// wait until to healthy state
+				if retryTimes > 3 {
+					pgCtrl.podCtrls[i-1].Refresh(pgCtrl.engine.cluster)
+				}
 				if pgCtrl.podCtrls[i-1].pod.Healthst == HealthStateHealthy {
 					break
 				}
