@@ -122,11 +122,10 @@ func (op pgOperUpgradeInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 	newPodSpec.PrevState = podCtrl.spec.PrevState.Clone() // upgrade action, state should not changed
 	prevNodeName := newPodSpec.PrevState.NodeName
 
-	isLastPodHealthy := pgCtrl.waitLastPodHealth(op.instanceNo - 1)
-	if pgCtrl.shouldRollBack(isLastPodHealthy, op.instanceNo) {
+	isLastPodHealthy := pgCtrl.waitLastPodHealth(op.instanceNo)
+	if !isLastPodHealthy && op.instanceNo == 2 && pgCtrl.rollBack() {
 		return false
 	}
-
 	log.Infof("upgrade instance : %d !", op.instanceNo)
 	var lowOp pgOperation
 	lowOp = pgOperRemoveInstance{op.instanceNo, op.oldPodSpec}
@@ -588,13 +587,13 @@ func (op pgOperChangeState) Do(pgCtrl *podGroupController, c cluster.Cluster, st
 			podCtrl.pod.ChangeTargetState(ExpectStateStop)
 		}
 	case "restart":
-		pgCtrl.waitLastPodHealth(op.instance - 1)
+		pgCtrl.waitLastPodHealth(op.instance)
 		podCtrl.Restart(c)
 		if podCtrl.pod.State != RunStateFail {
 			podCtrl.pod.ChangeTargetState(ExpectStateRun)
 		}
 	}
-	log.Infof("podCtrl.pod:%v,podCtrl.pod.State:%v, target_state:%v", podCtrl.pod, podCtrl.pod.State, podCtrl.pod.TargetState)
+	log.Infof("podCtrl.pod.State:%v, target_state:%v", podCtrl.pod.State, podCtrl.pod.TargetState)
 	return false
 }
 

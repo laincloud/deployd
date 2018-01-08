@@ -641,7 +641,6 @@ func (engine *OrcEngine) startClusterMonitor() {
 			restart <- true
 		} else {
 			engine.clusterRequestSucceed()
-			// log.Debugf("Cluster event: %v", event)
 			if strings.HasPrefix(event.From, "swarm") {
 				switch event.Status {
 				case "engine_disconnect":

@@ -36,12 +36,20 @@ const (
 
 // podController is controlled by the podGroupController
 type podController struct {
-	spec PodSpec
-	pod  Pod
+	spec  PodSpec
+	pod   Pod
+	event chan interface{}
 }
 
 func (pc *podController) String() string {
 	return fmt.Sprintf("PodCtrl %s", pc.spec)
+}
+
+func (pc *podController) launchEvent(v interface{}) {
+	select {
+	case pc.event <- v:
+	default:
+	}
 }
 
 func (pc *podController) Deploy(cluster cluster.Cluster) {
@@ -370,9 +378,13 @@ func (pc *podController) refreshContainer(kluster cluster.Cluster, index int) {
 		}
 		health := state.Health
 		if health != nil {
+			// created container extends its last running health status when restart the container
+			options := pc.spec.HealthConfig.FetchOption()
+			checkedPoint := options.Interval*options.Retries + options.Timeout + 1
 			if health.Status == HealthState(HealthStateStarting).String() {
 				pc.pod.Healthst = HealthState(HealthStateStarting)
-			} else if health.Status == HealthState(HealthStateHealthy).String() {
+			} else if health.Status == HealthState(HealthStateHealthy).String() &&
+				time.Now().After(state.StartedAt.Add(time.Second*time.Duration(checkedPoint))) {
 				pc.pod.Healthst = HealthState(HealthStateHealthy)
 			} else {
 				// Make sure checked enough times
@@ -492,7 +504,7 @@ func (pc *podController) createHostConfig(index int) adoc.HostConfig {
 	resource := FetchResource()
 	hc := adoc.HostConfig{
 		Memory:     spec.MemoryLimit,
-		MemorySwap: spec.MemoryLimit,
+		MemorySwap: spec.MemoryLimit, // Memory == MemorySwap means disable swap
 		CPUPeriod:  CPUQuota,
 		CPUQuota:   int64(spec.CpuLimit*resource.Cpu*CPUMaxPctg) * CPUQuota / int64(CPUMaxLevel*100),
 	}
