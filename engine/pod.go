@@ -103,6 +103,7 @@ func (pc *podController) Deploy(cluster cluster.Cluster) {
 
 	if pc.pod.State == RunStatePending {
 		pc.pod.State = RunStateSuccess
+		pc.pod.TargetState = ExpectStateRun
 	}
 }
 
