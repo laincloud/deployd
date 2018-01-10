@@ -36,12 +36,20 @@ const (
 
 // podController is controlled by the podGroupController
 type podController struct {
-	spec PodSpec
-	pod  Pod
+	spec  PodSpec
+	pod   Pod
+	event chan interface{}
 }
 
 func (pc *podController) String() string {
 	return fmt.Sprintf("PodCtrl %s", pc.spec)
+}
+
+func (pc *podController) launchEvent(v interface{}) {
+	select {
+	case pc.event <- v:
+	default:
+	}
 }
 
 func (pc *podController) Deploy(cluster cluster.Cluster) {
@@ -95,6 +103,7 @@ func (pc *podController) Deploy(cluster cluster.Cluster) {
 
 	if pc.pod.State == RunStatePending {
 		pc.pod.State = RunStateSuccess
+		pc.pod.TargetState = ExpectStateRun
 	}
 }
 
@@ -324,12 +333,20 @@ func (pc *podController) refreshContainer(kluster cluster.Cluster, index int) {
 		}
 	} else {
 		// inspect pod successed
-
 		network := pc.spec.Network
 		if network == "" {
 			network = pc.spec.Namespace
 		}
 		prevIP, nowIP := pc.spec.PrevState.IPs[index], info.NetworkSettings.Networks[network].IPAddress
+		// NOTE: if the container's ip is not equal to prev ip, try to correct it; if failed, accpet new ip
+		if prevIP != "" && prevIP != nowIP {
+			log.Warnf("%s find the IP changed, prev is %s, but now is %s, try to correct it", pc, prevIP, nowIP)
+			if !pc.tryCorrectIPAddress(kluster, id, nowIP, prevIP) {
+				log.Warnf("%s fail to correct container ip to %s, accpet new ip %s.", pc, prevIP, nowIP)
+			} else {
+				nowIP = prevIP
+			}
+		}
 
 		container := Container{
 			Id:            id,
@@ -361,29 +378,21 @@ func (pc *podController) refreshContainer(kluster cluster.Cluster, index int) {
 			}
 		}
 		health := state.Health
-		options := pc.spec.HealthConfig.FetchOption()
-		checkedPoint := (options.Interval + options.Timeout) * options.Retries
-		if health != nil && time.Now().After(state.StartedAt.Add(
-			time.Second*time.Duration(checkedPoint))) {
+		if health != nil {
+			// created container extends its last running health status when restart the container
+			options := pc.spec.HealthConfig.FetchOption()
+			checkedPoint := options.Interval*options.Retries + options.Timeout + 1
 			if health.Status == HealthState(HealthStateStarting).String() {
 				pc.pod.Healthst = HealthState(HealthStateStarting)
-			} else if health.Status == HealthState(HealthStateHealthy).String() {
+			} else if health.Status == HealthState(HealthStateHealthy).String() &&
+				time.Now().After(state.StartedAt.Add(time.Second*time.Duration(checkedPoint))) {
 				pc.pod.Healthst = HealthState(HealthStateHealthy)
 			} else {
+				// Make sure checked enough times
 				pc.pod.Healthst = HealthState(HealthStateUnHealthy)
 			}
 		} else {
 			pc.pod.Healthst = HealthState(HealthStateNone)
-		}
-		// if pod is running try correct ip
-		if state.Running && prevIP != "" && prevIP != nowIP {
-			// NOTE: if the container's ip is not equal to prev ip, try to correct it; if failed, accpet new ip
-			log.Warnf("%s find the IP changed, prev is %s, but now is %s, try to correct it", pc, prevIP, nowIP)
-			if !pc.tryCorrectIPAddress(kluster, id, nowIP, prevIP) {
-				log.Warnf("%s fail to correct container ip to %s, accpet new ip %s.", pc, prevIP, nowIP)
-			} else {
-				nowIP = prevIP
-			}
 		}
 	}
 }
@@ -496,7 +505,7 @@ func (pc *podController) createHostConfig(index int) adoc.HostConfig {
 	resource := FetchResource()
 	hc := adoc.HostConfig{
 		Memory:     spec.MemoryLimit,
-		MemorySwap: spec.MemoryLimit,
+		MemorySwap: spec.MemoryLimit, // Memory == MemorySwap means disable swap
 		CPUPeriod:  CPUQuota,
 		CPUQuota:   int64(spec.CpuLimit*resource.Cpu*CPUMaxPctg) * CPUQuota / int64(CPUMaxLevel*100),
 	}

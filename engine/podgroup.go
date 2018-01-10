@@ -107,6 +107,9 @@ func (pgCtrl *podGroupController) IsPending() bool {
 }
 
 func (pgCtrl *podGroupController) Deploy() {
+	defer func() {
+		pgCtrl.opsChan <- pgOperOver{}
+	}()
 	pgCtrl.RLock()
 	spec := pgCtrl.spec.Clone()
 	pgCtrl.RUnlock()
@@ -126,10 +129,12 @@ func (pgCtrl *podGroupController) Deploy() {
 	pgCtrl.opsChan <- pgOperSnapshotPrevState{}
 	pgCtrl.opsChan <- pgOperSaveStore{true}
 	pgCtrl.opsChan <- pgOperLogOperation{"deploy finished"}
-	pgCtrl.opsChan <- pgOperOver{}
 }
 
 func (pgCtrl *podGroupController) RescheduleInstance(numInstances int, restartPolicy ...RestartPolicy) {
+	defer func() {
+		pgCtrl.opsChan <- pgOperOver{}
+	}()
 	pgCtrl.RLock()
 	spec := pgCtrl.spec.Clone()
 	pgCtrl.RUnlock()
@@ -174,10 +179,12 @@ func (pgCtrl *podGroupController) RescheduleInstance(numInstances int, restartPo
 		pgCtrl.opsChan <- pgOperSaveStore{true}
 	}
 	pgCtrl.opsChan <- pgOperLogOperation{"Reschedule instance number finished"}
-	pgCtrl.opsChan <- pgOperOver{}
 }
 
 func (pgCtrl *podGroupController) RescheduleSpec(podSpec PodSpec) {
+	defer func() {
+		pgCtrl.opsChan <- pgOperOver{}
+	}()
 	pgCtrl.RLock()
 	spec := pgCtrl.spec.Clone()
 	pgCtrl.RUnlock()
@@ -211,10 +218,12 @@ func (pgCtrl *podGroupController) RescheduleSpec(podSpec PodSpec) {
 	pgCtrl.opsChan <- pgOperSnapshotPrevState{}
 	pgCtrl.opsChan <- pgOperSaveStore{true}
 	pgCtrl.opsChan <- pgOperLogOperation{"Reschedule spec finished"}
-	pgCtrl.opsChan <- pgOperOver{}
 }
 
 func (pgCtrl *podGroupController) RescheduleDrift(fromNode, toNode string, instanceNo int, force bool) {
+	defer func() {
+		pgCtrl.opsChan <- pgOperOver{}
+	}()
 	pgCtrl.RLock()
 	spec := pgCtrl.spec.Clone()
 	pgCtrl.RUnlock()
@@ -233,10 +242,12 @@ func (pgCtrl *podGroupController) RescheduleDrift(fromNode, toNode string, insta
 	pgCtrl.opsChan <- pgOperSnapshotPrevState{}
 	pgCtrl.opsChan <- pgOperSaveStore{false}
 	pgCtrl.opsChan <- pgOperLogOperation{"Reschedule drift finished"}
-	pgCtrl.opsChan <- pgOperOver{}
 }
 
 func (pgCtrl *podGroupController) Remove() {
+	defer func() {
+		pgCtrl.opsChan <- pgOperOver{}
+	}()
 	pgCtrl.RLock()
 	spec := pgCtrl.spec.Clone()
 	pgCtrl.RUnlock()
@@ -249,7 +260,6 @@ func (pgCtrl *podGroupController) Remove() {
 	pgCtrl.opsChan <- pgOperLogOperation{"Remove finished"}
 	pgCtrl.opsChan <- pgOperSnapshotEagleView{spec.Name}
 	pgCtrl.opsChan <- pgOperPurge{}
-	pgCtrl.opsChan <- pgOperOver{}
 }
 
 func (pgCtrl *podGroupController) Refresh(force bool) {
@@ -272,6 +282,9 @@ func (pgCtrl *podGroupController) Refresh(force bool) {
 }
 
 func (pgCtrl *podGroupController) ChangeState(op string, instance int) {
+	defer func() {
+		pgCtrl.opsChan <- pgOperOver{}
+	}()
 	pgCtrl.RLock()
 	spec := pgCtrl.spec.Clone()
 	pgCtrl.RUnlock()
@@ -284,7 +297,6 @@ func (pgCtrl *podGroupController) ChangeState(op string, instance int) {
 	}
 	pgCtrl.opsChan <- pgOperSnapshotGroup{true}
 	pgCtrl.opsChan <- pgOperSaveStore{true}
-	pgCtrl.opsChan <- pgOperOver{}
 }
 
 func (pgCtrl *podGroupController) Activate(c cluster.Cluster, store storage.Store, eagle *RuntimeEagleView, stop chan struct{}) {
@@ -331,10 +343,6 @@ func (pgCtrl *podGroupController) LastSpec() *PodGroupSpec {
 	}
 	log.Infof("Fetch LastPodSpec :%v", lastSpec)
 	return &lastSpec
-}
-
-func (pgCtrl *podGroupController) checkUpgradeResult() {
-
 }
 
 /*
@@ -539,37 +547,86 @@ func (pgCtrl *podGroupController) updatePodPorts(podSpec PodSpec) bool {
 	return true
 }
 
-func (pgCtrl *podGroupController) waitLastPodHealth(i int) bool {
-	retries := 5
+func (pgCtrl *podGroupController) rollBack() bool {
+	log.Infof("upgrade Failed!")
+	lastSpec := pgCtrl.LastSpec()
+	if lastSpec != nil {
+		// 1. disable refresh(so no others can produce operation) and flush ops chan
+		log.Infof("Start Rollback!")
+		pgCtrl.DisableRefresh()
+		pgCtrl.FlushAllOps()
+		// 2. rollback podgroup podspec info
+		pgCtrl.Lock()
+		spec := pgCtrl.spec.Clone()
+		pgCtrl.spec = *lastSpec
+		pgCtrl.Unlock()
+		// 3. rollback instance 1
+		pgCtrl.opsChan <- pgOperUpgradeInstance{1, spec.Version, spec.Pod, lastSpec.Pod}
+		// 4. return error
+		pgCtrl.Lock()
+		pgCtrl.group.LastError = fmt.Sprintf("Your Last upgrade is terrrible, so we won't upgrade it, please check your code carefully!!")
+		pgCtrl.Unlock()
+		pgCtrl.opsChan <- pgOperSnapshotGroup{true}
+		pgCtrl.opsChan <- pgOperSaveStore{true}
+		// 5. enable refresh
+		pgCtrl.EnableRefresh()
+		// 6. op over
+		pgCtrl.opsChan <- pgOperOver{}
+		// 7. notify
+		ntfController.Send(NewNotifySpec(pgCtrl.spec.Namespace, pgCtrl.spec.Name,
+			1, time.Now(), fmt.Sprintf(NotifyUpgradeFailedTmplt, spec.Version)))
+		log.Infof("Rollback Over!")
+		return true
+	} else {
+		log.Warn("No last spec info found, do nothing and upgrade anyway!")
+	}
+	return false
+}
+
+// Called when upgrade/restart podgroup
+func (pgCtrl *podGroupController) waitLastPodHealth(instanceNo int) bool {
+	maxRetries := 5
 	retryTimes := 0
-	if i > 0 {
+	if instanceNo > 1 {
 		sleepTime := DefaultSetUpTime
 		podSpec := pgCtrl.spec.Pod
 		if podSpec.GetSetupTime() > DefaultSetUpTime {
 			sleepTime = podSpec.GetSetupTime()
 		}
+		lastPodCtrl := pgCtrl.podCtrls[instanceNo-2]
 		// wait some seconds for new instance's initialization completed, before we update next one
-		if pgCtrl.podCtrls[i].pod.Healthst == HealthStateNone {
+		if lastPodCtrl.pod.Healthst == HealthStateNone {
 			time.Sleep(time.Second * time.Duration(podSpec.GetSetupTime()))
 		} else {
+			tick := time.Tick(time.Duration(sleepTime) * time.Second)
+		Loop:
 			for {
-				if retryTimes == retries {
+				select {
+				case <-tick:
+					retryTimes++
+					// wait until to healthy state
+					lastPodCtrl.Refresh(pgCtrl.engine.cluster)
+					log.Infof("emit with loop :%v", lastPodCtrl.pod.Healthst)
+					if lastPodCtrl.pod.Healthst == HealthStateHealthy {
+						break Loop
+					}
+				case <-lastPodCtrl.event:
+					log.Infof("emit with event:%v", lastPodCtrl.pod.Healthst)
+					if lastPodCtrl.pod.Healthst == HealthStateHealthy {
+						break Loop
+					}
+				}
+				if retryTimes >= maxRetries {
 					break
 				}
-				retryTimes++
-				// wait until to healthy state
-				if pgCtrl.podCtrls[i-1].pod.Healthst == HealthStateHealthy {
-					break
-				}
-				time.Sleep(time.Second * time.Duration(sleepTime))
 			}
 		}
 	}
 	// reset health state to starting
-	if pgCtrl.podCtrls[i].pod.Healthst != HealthStateNone {
-		pgCtrl.podCtrls[i].pod.Healthst = HealthStateStarting
+	if pgCtrl.podCtrls[instanceNo-1].pod.Healthst != HealthStateNone {
+		pgCtrl.podCtrls[instanceNo-1].pod.Healthst = HealthStateStarting
 	}
-	if retryTimes == retries && pgCtrl.podCtrls[i-1].pod.Healthst != HealthStateHealthy {
+	if retryTimes >= maxRetries && pgCtrl.podCtrls[instanceNo-2].pod.Healthst != HealthStateHealthy {
 		return false
 	}
 	return true
@@ -594,8 +651,9 @@ func newPodGroupController(spec PodGroupSpec, states []PodPrevState, pg PodGroup
 			podSpec.PrevState = NewPodPrevState(1) // set empty prev state
 		}
 		podCtrls[i] = &podController{
-			spec: podSpec,
-			pod:  pod,
+			spec:  podSpec,
+			pod:   pod,
+			event: make(chan interface{}),
 		}
 	}
 	// we may have some running pods loading from the storage

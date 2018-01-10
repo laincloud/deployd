@@ -211,13 +211,6 @@ func (engine *OrcEngine) RefreshPodGroup(name string, forceUpdate bool) error {
 	}
 }
 
-func canOperation(pgCtrl *podGroupController, target PGOpState) error {
-	if opState := pgCtrl.CanOperate(target); opState != PGOpStateIdle {
-		return OperLockedError{info: opState.String()}
-	}
-	return nil
-}
-
 func (engine *OrcEngine) RemovePodGroup(name string) error {
 	engine.Lock()
 	defer engine.Unlock()
@@ -580,6 +573,13 @@ func (engine *OrcEngine) checkPodGroupRemoveResult(name string, pgCtrl *podGroup
 	}
 }
 
+func canOperation(pgCtrl *podGroupController, target PGOpState) error {
+	if opState := pgCtrl.CanOperate(target); opState != PGOpStateIdle {
+		return OperLockedError{info: opState.String()}
+	}
+	return nil
+}
+
 func (engine *OrcEngine) GetConstraints(cstType string) (ConstraintSpec, bool) {
 	return cstController.GetConstraint(cstType)
 }
@@ -641,7 +641,6 @@ func (engine *OrcEngine) startClusterMonitor() {
 			restart <- true
 		} else {
 			engine.clusterRequestSucceed()
-			// log.Debugf("Cluster event: %v", event)
 			if strings.HasPrefix(event.From, "swarm") {
 				switch event.Status {
 				case "engine_disconnect":

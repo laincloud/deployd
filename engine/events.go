@@ -89,13 +89,17 @@ func handleContainerEvent(engine *OrcEngine, event *adoc.Event) {
 			if podName, instance, err := util.ParseNameInstanceNo(containerName); err == nil {
 				pgCtrl, ok := engine.pgCtrls[podName]
 				if ok {
+					pgCtrl.Lock()
 					if len(pgCtrl.podCtrls) >= instance {
-						pgCtrl.Lock()
-						pgCtrl.podCtrls[instance-1].pod.Healthst = status
-						pgCtrl.Unlock()
+						podCtrl := pgCtrl.podCtrls[instance-1]
+						podCtrl.pod.Healthst = status
+						if status == HealthStateHealthy {
+							podCtrl.launchEvent(struct{}{})
+						}
 						pgCtrl.opsChan <- pgOperSnapshotGroup{true}
 						pgCtrl.opsChan <- pgOperSaveStore{true}
 					}
+					pgCtrl.Unlock()
 				}
 			}
 		} else {
@@ -120,7 +124,6 @@ func HandleDockerEvent(engine *OrcEngine, event *adoc.Event) {
 }
 
 // cnt means container
-
 const (
 	KCntStatus          = "/lain/deployd/histroy"
 	FmtKCntStatusLstPos = "/lain/deployd/histroy/%s/%d/lastpos"
@@ -218,9 +221,9 @@ func (esh *engineStatusHistory) checkStatus(engine *OrcEngine) {
 	}
 }
 
-// egStatuses:map[]
-//	pgStatuses: map[]
-//    podStatusHistory:map[]
+// egStatuses(engine statuses):map[]
+//	pgStatuses(podgroup statuses): map[]
+//    podStatusHistory(pod status histories):map[]
 //		DETAILDATA
 var (
 	egStatuses *engineStatusHistory
