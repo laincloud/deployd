@@ -39,27 +39,6 @@ type EngineConfig struct {
 	Maintenance bool `json:"maintenance"`
 }
 
-func (engine *OrcEngine) ReadOnly() bool {
-	return engine.config.ReadOnly || engine.config.Maintenance
-}
-
-func (engine *OrcEngine) Config() EngineConfig {
-	return engine.config
-}
-
-func (engine *OrcEngine) Maintaince(maintaince bool) {
-	engine.RLock()
-	defer engine.RUnlock()
-	engine.config.Maintenance = maintaince
-}
-
-func (engine *OrcEngine) SetConfig(config EngineConfig) {
-	engine.RLock()
-	defer engine.RUnlock()
-	engine.config = config
-	ConfigEngine(engine)
-}
-
 type OrcEngine struct {
 	sync.RWMutex
 
@@ -81,13 +60,43 @@ const (
 	downNodeResetPeriod = 3 * time.Minute
 )
 
+func (engine *OrcEngine) ReadOnly() bool {
+	return engine.config.ReadOnly || engine.config.Maintenance
+}
+
+func (engine *OrcEngine) Config() EngineConfig {
+	return engine.config
+}
+
+func (engine *OrcEngine) Maintaince(maintaince bool) {
+	engine.RLock()
+	defer engine.RUnlock()
+	engine.config.Maintenance = maintaince
+}
+
+func (engine *OrcEngine) SetConfig(config EngineConfig) {
+	engine.RLock()
+	defer engine.RUnlock()
+	engine.config = config
+	ConfigEngine(engine)
+}
+
+func (engine *OrcEngine) PgOpStart(pgName string) {
+	pgOpStart(engine.store, pgName)
+}
+
+func (engine *OrcEngine) PgOpOver(pgName string) {
+	pgOpOver(engine.store, pgName)
+}
+
 func (engine *OrcEngine) ListenerId() string {
 	return "deployd.orc_engine"
 }
 
 func (engine *OrcEngine) HandleEvent(payload interface{}) {
 	// Handle the dependency events
-	if event, ok := payload.(DependencyEvent); ok {
+	switch event := payload.(type) {
+	case DependencyEvent:
 		engine.RLock()
 		defer engine.RUnlock()
 		if depCtrl, ok := engine.dependsCtrls[event.Name]; ok {
@@ -97,7 +106,11 @@ func (engine *OrcEngine) HandleEvent(payload interface{}) {
 			// FIXME we are missing some dependency, should create the alarm
 			log.Warnf("Engine found some missing dependency pod, %s", event.Name)
 		}
-		return
+	case OperationEvent:
+		log.Infof("OperationEvent is %v\n", event)
+		engine.opsChan <- orcOperEventHandler{event}
+	default:
+		log.Debugf("I don't know about type %T!\n", event)
 	}
 }
 
@@ -348,6 +361,7 @@ func (engine *OrcEngine) Start() {
 	engine.stop = make(chan struct{})
 	go engine.initOperationWorker()
 	go engine.startClusterMonitor()
+	go engine.checkOperatingPgs()
 }
 
 func (engine *OrcEngine) Stop() {
@@ -450,6 +464,39 @@ func (engine *OrcEngine) LoadPodGroups() error {
 	return nil
 }
 
+func (engine *OrcEngine) GetConstraints(cstType string) (ConstraintSpec, bool) {
+	return cstController.GetConstraint(cstType)
+}
+
+func (engine *OrcEngine) UpdateConstraints(spec ConstraintSpec) error {
+	return cstController.SetConstraint(spec, engine.store)
+}
+
+func (engine *OrcEngine) DeleteConstraints(cstType string) error {
+	if _, ok := cstController.GetConstraint(cstType); !ok {
+		return ErrConstraintNotExists
+	} else {
+		return cstController.RemoveConstraint(cstType, engine.store)
+	}
+}
+
+func (engine *OrcEngine) GetNotifies() []string {
+	notifies := ntfController.GetAllNotifies()
+	return ntfController.CallbackList(notifies)
+}
+
+func (engine *OrcEngine) AddNotify(callback string) error {
+	return ntfController.AddNotify(callback, engine.store)
+}
+
+func (engine *OrcEngine) DeleteNotify(callback string) error {
+	if _, ok := ntfController.GetAllNotifies()[callback]; !ok {
+		return ErrNotifyNotExists
+	} else {
+		return ntfController.RemoveNotify(callback, engine.store)
+	}
+}
+
 func (engine *OrcEngine) initDependsCtrl(spec PodSpec, pods map[string]map[string]SharedPodWithSpec) *dependsController {
 	depCtrl := newDependsController(spec, pods)
 	depCtrl.Activate(engine.cluster, engine.store, engine.eagleView, engine.stop)
@@ -468,6 +515,37 @@ func (engine *OrcEngine) clusterRequestFailed() {
 	if engine.clstrFailCnt > ClusterFailedThreadSold && engine.clstrFailCnt%ClusterFailedThreadSold == 0 {
 		ntfController.Send(NewNotifySpec("Cluster", "Cluster-Manager",
 			1, time.Now(), NotifyClusterUnHealthy))
+	}
+}
+
+func (engine *OrcEngine) checkOperatingPgs() {
+	engine.RLock()
+	defer engine.RUnlock()
+	unFinishedPgs := operatings(engine.store)
+	log.Infof("Unfinished works:%v \n", unFinishedPgs)
+	for _, pgName := range unFinishedPgs {
+		if pgCtrl, ok := engine.pgCtrls[pgName]; ok {
+			engine.opsChan <- orcOperRefresh{pgCtrl, false}
+		} else {
+			engine.cleanCorruptedPodGroup(pgName)
+		}
+	}
+}
+
+func (engine *OrcEngine) cleanCorruptedPodGroup(pgName string) {
+	c := engine.cluster
+	if pods, err := engine.eagleView.RefreshPodGroup(c, pgName); err != nil {
+		log.Warn("Refresh corrupted PodGroup Failed with Error:%v\n", err)
+	} else {
+		for _, pod := range pods {
+			container := pod.Container
+			if err := c.StopContainer(container.Id, 10); err != nil {
+				log.Warnf("cannot stop the container %s, %s, remove it directly", container.Id, err.Error())
+			}
+			if err := c.RemoveContainer(container.Id, true, false); err != nil {
+				log.Warnf("Cannot remove the container %s, %s", container.Id, err)
+			}
+		}
 	}
 }
 
@@ -580,38 +658,35 @@ func canOperation(pgCtrl *podGroupController, target PGOpState) error {
 	return nil
 }
 
-func (engine *OrcEngine) GetConstraints(cstType string) (ConstraintSpec, bool) {
-	return cstController.GetConstraint(cstType)
-}
-
-func (engine *OrcEngine) UpdateConstraints(spec ConstraintSpec) error {
-	return cstController.SetConstraint(spec, engine.store)
-}
-
-func (engine *OrcEngine) DeleteConstraints(cstType string) error {
-	if _, ok := cstController.GetConstraint(cstType); !ok {
-		return ErrConstraintNotExists
+// fetch all operating pgs' name
+func operatings(store storage.Store) []string {
+	operatingPrefixKey := kLainDeploydRootKey + "/" + kLainPgOpingKey
+	results := make([]string, 0)
+	if keys, err := store.KeysByPrefix(operatingPrefixKey); err != nil {
+		log.Warnf("[Store] Failed to fetch operating pod groups %s, %s", operatingPrefixKey, err)
 	} else {
-		return cstController.RemoveConstraint(cstType, engine.store)
+		for _, key := range keys {
+			results = append(results, strings.TrimPrefix(key, operatingPrefixKey+"/"))
+		}
+	}
+	return results
+}
+
+func pgOpStart(store storage.Store, pgname string) {
+	operatingKey := kLainDeploydRootKey + "/" + kLainPgOpingKey + "/" + pgname
+	if err := store.SetWithTTL(operatingKey, struct{}{}, DefaultLastSpecCacheTTL, true); err != nil {
+		log.Warnf("[Store] Failed to save operating pod group %s, %s", operatingKey, err)
 	}
 }
 
-func (engine *OrcEngine) GetNotifies() []string {
-	notifies := ntfController.GetAllNotifies()
-	return ntfController.CallbackList(notifies)
-}
-
-func (engine *OrcEngine) AddNotify(callback string) error {
-	return ntfController.AddNotify(callback, engine.store)
-}
-
-func (engine *OrcEngine) DeleteNotify(callback string) error {
-	if _, ok := ntfController.GetAllNotifies()[callback]; !ok {
-		return ErrNotifyNotExists
-	} else {
-		return ntfController.RemoveNotify(callback, engine.store)
+func pgOpOver(store storage.Store, pgname string) {
+	operatingKey := kLainDeploydRootKey + "/" + kLainPgOpingKey + "/" + pgname
+	if err := store.Remove(operatingKey); err != nil {
+		log.Warnf("[Store] Failed to remove operating pod group %s, %s", operatingKey, err)
 	}
 }
+
+// kLainPgOpingKey
 
 func (engine *OrcEngine) onClusterNodeLost(nodeName string, downCount int) {
 	log.Warnf("Cluster node is down, [%q], %s nodes down in all, will check if need stop the engine", nodeName, downCount)

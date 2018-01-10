@@ -57,6 +57,20 @@ func (op orcOperDependsDispatch) Do(engine *OrcEngine) {
 	}
 }
 
+type orcOperEventHandler struct {
+	event OperationEvent
+}
+
+func (op orcOperEventHandler) Do(engine *OrcEngine) {
+	event := op.event
+	switch event.Type {
+	case OperationStart:
+		engine.PgOpStart(event.PgName)
+	case OperationOver:
+		engine.PgOpOver(event.PgName)
+	}
+}
+
 // PodGroup Operations
 
 type orcOperDeploy struct {

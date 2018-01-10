@@ -181,9 +181,17 @@ func (op pgOperRefreshInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 	if len(podCtrl.pod.Containers) <= 0 {
 		return false
 	}
-
+	// if some thing need change after refresh
+	consistent := true
 	container := podCtrl.pod.Containers[0]
-	if runtime.State == RunStateSuccess {
+	if (evVersion != -1 && op.spec.Version != evVersion) || podCtrl.spec.Version != op.spec.Version {
+		log.Warnf("PodGroupCtrl %s, we found pod running with lower version, just upgrade it", op.spec)
+		// the new spec should be in op.spec.Pod
+		op := pgOperUpgradeInstance{op.instanceNo, op.spec.Version, podCtrl.spec, op.spec.Pod}
+		op.Do(pgCtrl, c, store, ev)
+		runtime = podCtrl.pod.ImRuntime
+		consistent = false
+	} else if runtime.State == RunStateSuccess {
 		if runtime.Healthst == HealthStateUnHealthy {
 			startAt := podCtrl.pod.Containers[0].Runtime.State.StartedAt
 			checkTime := podCtrl.spec.GetSetupTime()
@@ -199,11 +207,8 @@ func (op pgOperRefreshInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 		if generics.Equal_StringSlice(evIds, podCtrl.pod.ContainerIds()) && op.spec.Version == evVersion {
 			pod := podCtrl.pod.Clone()
 			pgCtrl.emitChangeEvent("verify", podCtrl.spec, pod, pod.NodeName())
-			return false
 		}
-	}
-
-	if runtime.State == RunStateMissing {
+	} else if runtime.State == RunStateMissing {
 		if !FetchGuard().Working {
 			return false
 		}
@@ -242,19 +247,9 @@ func (op pgOperRefreshInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 			op := pgOperDeployInstance{op.instanceNo, op.spec.Version}
 			op.Do(pgCtrl, c, store, ev)
 			runtime = podCtrl.pod.ImRuntime
+			consistent = false
 		}
-		return false
-	}
-
-	if runtime.State == RunStateExit {
-		if (evVersion != -1 && op.spec.Version != evVersion) || podCtrl.spec.Version != op.spec.Version {
-			log.Warnf("PodGroupCtrl %s, we found pod running with lower version, just upgrade it", op.spec)
-			// the new spec should be in op.spec.Pod
-			op := pgOperUpgradeInstance{op.instanceNo, op.spec.Version, podCtrl.spec, op.spec.Pod}
-			op.Do(pgCtrl, c, store, ev)
-			runtime = podCtrl.pod.ImRuntime
-			return false
-		}
+	} else if runtime.State == RunStateExit {
 		if !pgCtrl.engine.config.Maintenance && podCtrl.pod.NeedRestart(op.spec.RestartPolicy) {
 			if podCtrl.pod.RestartEnoughTimes() {
 				ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name,
@@ -277,9 +272,15 @@ func (op pgOperRefreshInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 				pod := podCtrl.pod.Clone()
 				pgCtrl.emitChangeEvent("verify", podCtrl.spec, pod, pod.NodeName())
 			}
-			return false
 		}
 	}
+	if !consistent {
+		op1 := pgOperSnapshotGroup{true}
+		op1.Do(pgCtrl, c, store, ev)
+		op2 := pgOperSaveStore{true}
+		op2.Do(pgCtrl, c, store, ev)
+	}
+
 	return false
 }
 
@@ -603,5 +604,6 @@ type pgOperOver struct {
 
 func (op pgOperOver) Do(pgCtrl *podGroupController, c cluster.Cluster, store storage.Store, ev *RuntimeEagleView) bool {
 	pgCtrl.OperateOver()
+	pgCtrl.emitOperationEvent(OperationOver)
 	return false
 }

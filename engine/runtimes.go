@@ -293,3 +293,8 @@ type DependencyEvent struct {
 	NodeName  string
 	Namespace string
 }
+
+type OperationEvent struct {
+	Type   string // start, over
+	PgName string
+}

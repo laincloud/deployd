@@ -12,6 +12,11 @@ import (
 	"github.com/mijia/sweb/log"
 )
 
+const (
+	OperationStart = "start"
+	OperationOver  = "over"
+)
+
 type PodGroupWithSpec struct {
 	Spec      PodGroupSpec
 	PrevState []PodPrevState
@@ -107,8 +112,10 @@ func (pgCtrl *podGroupController) IsPending() bool {
 }
 
 func (pgCtrl *podGroupController) Deploy() {
+	pgCtrl.emitOperationEvent(OperationStart)
 	defer func() {
 		pgCtrl.opsChan <- pgOperOver{}
+
 	}()
 	pgCtrl.RLock()
 	spec := pgCtrl.spec.Clone()
@@ -132,6 +139,7 @@ func (pgCtrl *podGroupController) Deploy() {
 }
 
 func (pgCtrl *podGroupController) RescheduleInstance(numInstances int, restartPolicy ...RestartPolicy) {
+	pgCtrl.emitOperationEvent(OperationStart)
 	defer func() {
 		pgCtrl.opsChan <- pgOperOver{}
 	}()
@@ -182,6 +190,7 @@ func (pgCtrl *podGroupController) RescheduleInstance(numInstances int, restartPo
 }
 
 func (pgCtrl *podGroupController) RescheduleSpec(podSpec PodSpec) {
+	pgCtrl.emitOperationEvent(OperationStart)
 	defer func() {
 		pgCtrl.opsChan <- pgOperOver{}
 	}()
@@ -245,6 +254,7 @@ func (pgCtrl *podGroupController) RescheduleDrift(fromNode, toNode string, insta
 }
 
 func (pgCtrl *podGroupController) Remove() {
+	pgCtrl.emitOperationEvent(OperationStart)
 	defer func() {
 		pgCtrl.opsChan <- pgOperOver{}
 	}()
@@ -260,6 +270,25 @@ func (pgCtrl *podGroupController) Remove() {
 	pgCtrl.opsChan <- pgOperLogOperation{"Remove finished"}
 	pgCtrl.opsChan <- pgOperSnapshotEagleView{spec.Name}
 	pgCtrl.opsChan <- pgOperPurge{}
+}
+
+func (pgCtrl *podGroupController) ChangeState(op string, instance int) {
+	pgCtrl.emitOperationEvent(OperationStart)
+	defer func() {
+		pgCtrl.opsChan <- pgOperOver{}
+	}()
+	pgCtrl.RLock()
+	spec := pgCtrl.spec.Clone()
+	pgCtrl.RUnlock()
+	if instance == 0 {
+		for i := 0; i < spec.NumInstances; i += 1 {
+			pgCtrl.opsChan <- pgOperChangeState{op, i + 1}
+		}
+	} else if instance > 0 && instance <= spec.NumInstances {
+		pgCtrl.opsChan <- pgOperChangeState{op, instance}
+	}
+	pgCtrl.opsChan <- pgOperSnapshotGroup{true}
+	pgCtrl.opsChan <- pgOperSaveStore{true}
 }
 
 func (pgCtrl *podGroupController) Refresh(force bool) {
@@ -279,24 +308,6 @@ func (pgCtrl *podGroupController) Refresh(force bool) {
 	pgCtrl.opsChan <- pgOperSnapshotPrevState{}
 	pgCtrl.opsChan <- pgOperSaveStore{false}
 	pgCtrl.opsChan <- pgOperLogOperation{"PodGroup refreshing finished"}
-}
-
-func (pgCtrl *podGroupController) ChangeState(op string, instance int) {
-	defer func() {
-		pgCtrl.opsChan <- pgOperOver{}
-	}()
-	pgCtrl.RLock()
-	spec := pgCtrl.spec.Clone()
-	pgCtrl.RUnlock()
-	if instance == 0 {
-		for i := 0; i < spec.NumInstances; i += 1 {
-			pgCtrl.opsChan <- pgOperChangeState{op, i + 1}
-		}
-	} else if instance > 0 && instance <= spec.NumInstances {
-		pgCtrl.opsChan <- pgOperChangeState{op, instance}
-	}
-	pgCtrl.opsChan <- pgOperSnapshotGroup{true}
-	pgCtrl.opsChan <- pgOperSaveStore{true}
 }
 
 func (pgCtrl *podGroupController) Activate(c cluster.Cluster, store storage.Store, eagle *RuntimeEagleView, stop chan struct{}) {
@@ -425,6 +436,14 @@ func (pgCtrl *podGroupController) emitChangeEvent(changeType string, spec PodSpe
 	for _, evt := range events {
 		pgCtrl.EmitEvent(evt)
 	}
+}
+
+func (pgCtrl *podGroupController) emitOperationEvent(operationType string) {
+	if operationType == "" {
+		return
+	}
+	log.Debugf("%s emit operation event: %s", pgCtrl, operationType)
+	pgCtrl.EmitEvent(OperationEvent{Type: operationType, PgName: pgCtrl.spec.Name})
 }
 
 func (pgCtrl *podGroupController) cancelPodPorts() {
