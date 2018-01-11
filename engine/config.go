@@ -7,9 +7,17 @@ import (
 	"github.com/mijia/sweb/log"
 )
 
+type Device struct {
+	Path    string `json:"path"`
+	MaxIops uint64 `json:"iops"`
+	MaxRate string `json:"rate"`
+	Ratio   uint64 `json:"ratio,omitempty"`
+}
+
 type Resource struct {
-	Cpu    int    `json:"cpu"`
-	Memory string `json:"memory"`
+	Cpu     int      `json:"cpu"`
+	Memory  string   `json:"memory"`
+	Devices []Device `json:"devices"`
 }
 
 type Guard struct {
@@ -22,7 +30,8 @@ const (
 
 	EtcdConfigKey = "/lain/deployd/engine/config"
 
-	DefaultLastSpecCacheTTL = 10 * 60 // 10min
+	DefaultLastSpecCacheTTL = 10 * 60    // 10min
+	DefautDeviceRatio       = uint64(70) // 70% so should / 100
 )
 
 var (
