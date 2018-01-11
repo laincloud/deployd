@@ -19,6 +19,7 @@ const (
 	kLainPodKey         = "pods"
 	kLainNodesKey       = "nodes"
 	kLainLastPodSpecKey = "last_spec"
+	kLainPgOpingKey     = "operating"
 
 	kLainVolumeRoot      = "/data/lain/volumes"
 	kLainCloudVolumeRoot = "/data/lain/cloud-volumes"
@@ -231,7 +232,6 @@ func (s ContainerSpec) Equals(o ContainerSpec) bool {
 		generics.Equal_StringSlice(s.Entrypoint, o.Entrypoint) &&
 		s.LogConfig.Type == o.LogConfig.Type &&
 		generics.Equal_StringStringMap(s.LogConfig.Config, o.LogConfig.Config)
-
 }
 
 func NewContainerSpec(image string) ContainerSpec {
