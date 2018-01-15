@@ -9,6 +9,7 @@ import (
 
 	"github.com/laincloud/deployd/cluster"
 	"github.com/laincloud/deployd/network"
+	"github.com/laincloud/deployd/utils/units"
 	"github.com/laincloud/deployd/utils/util"
 	"github.com/mijia/adoc"
 	"github.com/mijia/go-generics"
@@ -503,11 +504,35 @@ func (pc *podController) createHostConfig(index int) adoc.HostConfig {
 		spec.CpuLimit = CPUDeafultLevel
 	}
 	resource := FetchResource()
+	BlkioDeviceReadBps := make([]*adoc.ThrottleDevice, 0)
+	BlkioDeviceWriteBps := make([]*adoc.ThrottleDevice, 0)
+	BlkioDeviceReadIOps := make([]*adoc.ThrottleDevice, 0)
+	BlkioDeviceWriteIOps := make([]*adoc.ThrottleDevice, 0)
+	for _, device := range resource.Devices {
+		ratio := DefautDeviceRatio
+		if device.Ratio > 0 && device.Ratio < 1 {
+			ratio = device.Ratio
+		}
+		if rate, err := units.FromHumanSize(device.MaxRate); err == nil {
+			ratebps := &adoc.ThrottleDevice{Path: device.Path, Rate: ratio * uint64(rate) / 100}
+			iops := &adoc.ThrottleDevice{Path: device.Path, Rate: ratio * device.MaxIops / 100}
+			BlkioDeviceReadBps = append(BlkioDeviceReadBps, ratebps)
+			BlkioDeviceWriteBps = append(BlkioDeviceWriteBps, ratebps)
+			BlkioDeviceReadIOps = append(BlkioDeviceReadIOps, iops)
+			BlkioDeviceWriteIOps = append(BlkioDeviceWriteIOps, iops)
+		}
+	}
 	hc := adoc.HostConfig{
-		Memory:     spec.MemoryLimit,
-		MemorySwap: spec.MemoryLimit, // Memory == MemorySwap means disable swap
-		CPUPeriod:  CPUQuota,
-		CPUQuota:   int64(spec.CpuLimit*resource.Cpu*CPUMaxPctg) * CPUQuota / int64(CPUMaxLevel*100),
+		Resources: adoc.Resources{
+			Memory:               spec.MemoryLimit,
+			MemorySwap:           spec.MemoryLimit, // Memory == MemorySwap means disable swap
+			CPUPeriod:            CPUQuota,
+			CPUQuota:             int64(spec.CpuLimit*resource.Cpu*CPUMaxPctg) * CPUQuota / int64(CPUMaxLevel*100),
+			BlkioDeviceReadBps:   BlkioDeviceReadBps,
+			BlkioDeviceWriteBps:  BlkioDeviceWriteBps,
+			BlkioDeviceReadIOps:  BlkioDeviceReadIOps,
+			BlkioDeviceWriteIOps: BlkioDeviceWriteIOps,
+		},
 	}
 	if spec.Expose > 0 {
 		hc.PortBindings = map[string][]adoc.PortBinding{
