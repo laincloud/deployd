@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/laincloud/deployd/cluster"
@@ -39,7 +40,7 @@ type podGroupController struct {
 	podCtrls   []*podController
 	opsChan    chan pgOperation
 
-	refreshable bool
+	refreshable int32
 
 	lastPodSpecKey string
 	storedKey      string
@@ -50,33 +51,32 @@ func (pgCtrl *podGroupController) String() string {
 	return fmt.Sprintf("PodGroupCtrl %s", pgCtrl.spec)
 }
 
-func (pgCtrl *podGroupController) CanOperate(pgops PGOpState) PGOpState {
-	pgCtrl.Lock()
-	defer pgCtrl.Unlock()
-	if pgCtrl.opState == PGOpStateIdle {
-		pgCtrl.opState = pgops
-		return PGOpStateIdle
+func (pgCtrl *podGroupController) CanOperate(pgops PGOpState) bool {
+	if atomic.CompareAndSwapInt32((*int32)(&pgCtrl.opState), PGOpStateIdle, int32(pgops)) {
+		pgCtrl.DisableRefresh()
+		return true
+	} else if atomic.LoadInt32((*int32)(&pgCtrl.opState)) == PGOpStateUpgrading &&
+		pgops == PGOpStateUpgrading {
+		// when pg is in upgreading state so flush old opchans and start new op
+		pgCtrl.DisableRefresh()
+		return true
 	}
-	return pgCtrl.opState
+	return false
 }
 
 func (pgCtrl *podGroupController) DisableRefresh() {
-	pgCtrl.Lock()
-	defer pgCtrl.Unlock()
-	pgCtrl.refreshable = false
+	atomic.StoreInt32(&(pgCtrl.refreshable), int32(0))
 }
 
 func (pgCtrl *podGroupController) EnableRefresh() {
-	pgCtrl.Lock()
-	defer pgCtrl.Unlock()
-	pgCtrl.refreshable = true
+	atomic.StoreInt32(&(pgCtrl.refreshable), int32(1))
 }
 
 // called by signle goroutine
 func (pgCtrl *podGroupController) OperateOver() {
-	pgCtrl.Lock()
-	defer pgCtrl.Unlock()
-	pgCtrl.opState = PGOpStateIdle
+	pgCtrl.emitOperationEvent(OperationOver)
+	atomic.StoreInt32((*int32)(&pgCtrl.opState), PGOpStateIdle)
+	pgCtrl.EnableRefresh()
 }
 
 func (pgCtrl *podGroupController) Inspect() PodGroupWithSpec {
@@ -112,6 +112,7 @@ func (pgCtrl *podGroupController) IsPending() bool {
 }
 
 func (pgCtrl *podGroupController) Deploy() {
+	pgCtrl.flushAllOps()
 	pgCtrl.emitOperationEvent(OperationStart)
 	defer func() {
 		pgCtrl.opsChan <- pgOperOver{}
@@ -139,6 +140,7 @@ func (pgCtrl *podGroupController) Deploy() {
 }
 
 func (pgCtrl *podGroupController) RescheduleInstance(numInstances int, restartPolicy ...RestartPolicy) {
+	pgCtrl.flushAllOps()
 	pgCtrl.emitOperationEvent(OperationStart)
 	defer func() {
 		pgCtrl.opsChan <- pgOperOver{}
@@ -190,6 +192,7 @@ func (pgCtrl *podGroupController) RescheduleInstance(numInstances int, restartPo
 }
 
 func (pgCtrl *podGroupController) RescheduleSpec(podSpec PodSpec) {
+	pgCtrl.flushAllOps()
 	pgCtrl.emitOperationEvent(OperationStart)
 	defer func() {
 		pgCtrl.opsChan <- pgOperOver{}
@@ -230,6 +233,7 @@ func (pgCtrl *podGroupController) RescheduleSpec(podSpec PodSpec) {
 }
 
 func (pgCtrl *podGroupController) RescheduleDrift(fromNode, toNode string, instanceNo int, force bool) {
+	pgCtrl.flushAllOps()
 	defer func() {
 		pgCtrl.opsChan <- pgOperOver{}
 	}()
@@ -254,6 +258,7 @@ func (pgCtrl *podGroupController) RescheduleDrift(fromNode, toNode string, insta
 }
 
 func (pgCtrl *podGroupController) Remove() {
+	pgCtrl.flushAllOps()
 	pgCtrl.emitOperationEvent(OperationStart)
 	defer func() {
 		pgCtrl.opsChan <- pgOperOver{}
@@ -273,6 +278,7 @@ func (pgCtrl *podGroupController) Remove() {
 }
 
 func (pgCtrl *podGroupController) ChangeState(op string, instance int) {
+	pgCtrl.flushAllOps()
 	pgCtrl.emitOperationEvent(OperationStart)
 	defer func() {
 		pgCtrl.opsChan <- pgOperOver{}
@@ -295,6 +301,10 @@ func (pgCtrl *podGroupController) Refresh(force bool) {
 	if pgCtrl.IsRemoved() || pgCtrl.IsPending() {
 		return
 	}
+	pgCtrl.DisableRefresh()
+	defer func() {
+		pgCtrl.opsChan <- pgOperOver{}
+	}()
 	pgCtrl.RLock()
 	spec := pgCtrl.spec.Clone()
 	pgCtrl.RUnlock()
@@ -328,11 +338,22 @@ func (pgCtrl *podGroupController) Activate(c cluster.Cluster, store storage.Stor
 	}()
 }
 
+func (pgCtrl *podGroupController) LastSpec() *PodGroupSpec {
+	log.Infof("Fetch LastPodSpec !")
+	var lastSpec PodGroupSpec
+	if err := pgCtrl.engine.store.Get(pgCtrl.lastPodSpecKey, &lastSpec); err != nil {
+		log.Infof("Fetch LastPodSpec with err:%v", err)
+		return nil
+	}
+	log.Infof("Fetch LastPodSpec :%v", lastSpec)
+	return &lastSpec
+}
+
 /*
  * clean all ops in chan synchronously
  *
  */
-func (pgCtrl *podGroupController) FlushAllOps() {
+func (pgCtrl *podGroupController) flushAllOps() {
 	for {
 		if len(pgCtrl.opsChan) == 0 {
 			return
@@ -343,17 +364,6 @@ func (pgCtrl *podGroupController) FlushAllOps() {
 			return
 		}
 	}
-}
-
-func (pgCtrl *podGroupController) LastSpec() *PodGroupSpec {
-	log.Infof("Fetch LastPodSpec !")
-	var lastSpec PodGroupSpec
-	if err := pgCtrl.engine.store.Get(pgCtrl.lastPodSpecKey, &lastSpec); err != nil {
-		log.Infof("Fetch LastPodSpec with err:%v", err)
-		return nil
-	}
-	log.Infof("Fetch LastPodSpec :%v", lastSpec)
-	return &lastSpec
 }
 
 /*
@@ -573,7 +583,7 @@ func (pgCtrl *podGroupController) rollBack() bool {
 		// 1. disable refresh(so no others can produce operation) and flush ops chan
 		log.Infof("Start Rollback!")
 		pgCtrl.DisableRefresh()
-		pgCtrl.FlushAllOps()
+		pgCtrl.flushAllOps()
 		// 2. rollback podgroup podspec info
 		pgCtrl.Lock()
 		spec := pgCtrl.spec.Clone()
@@ -692,7 +702,7 @@ func newPodGroupController(spec PodGroupSpec, states []PodPrevState, pg PodGroup
 		podCtrls: podCtrls,
 		opsChan:  make(chan pgOperation, 500),
 
-		refreshable: true,
+		refreshable: 1,
 
 		lastPodSpecKey: strings.Join([]string{kLainDeploydRootKey, kLainLastPodSpecKey, spec.Namespace, spec.Name}, "/"),
 		storedKey:      strings.Join([]string{kLainDeploydRootKey, kLainPodGroupKey, spec.Namespace, spec.Name}, "/"),

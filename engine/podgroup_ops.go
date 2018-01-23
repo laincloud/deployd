@@ -604,6 +604,5 @@ type pgOperOver struct {
 
 func (op pgOperOver) Do(pgCtrl *podGroupController, c cluster.Cluster, store storage.Store, ev *RuntimeEagleView) bool {
 	pgCtrl.OperateOver()
-	pgCtrl.emitOperationEvent(OperationOver)
 	return false
 }
