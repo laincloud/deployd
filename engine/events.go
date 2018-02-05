@@ -66,6 +66,30 @@ func (pub *_BasePublisher) RemoveListener(listener Listener) {
 }
 
 //*************************container events ****************************//
+func handleDieEvent(engine *OrcEngine, event *adoc.Event) {
+	actor := event.Actor
+	if name, ok := actor.Attributes["name"]; ok {
+		if pgname, _, instance, _, err := util.ParseContainerName(name); err == nil {
+			engine.RLock()
+			pgCtrl, ok := engine.pgCtrls[pgname]
+			engine.RUnlock()
+			if !ok {
+				return
+			}
+
+			pgCtrl.RLock()
+			state := pgCtrl.opState
+			spec := pgCtrl.spec.Clone()
+			pgCtrl.RUnlock()
+
+			if state != PGOpStateScheduling {
+				log.Warnf("got %s event from %s, refresh this instance", event.Status, name)
+				pgCtrl.opsChan <- pgOperRefreshInstance{instance, spec}
+			}
+		}
+	}
+}
+
 func handleContainerEvent(engine *OrcEngine, event *adoc.Event) {
 	if strings.HasPrefix(event.Status, "health_status") {
 		id := event.ID
@@ -108,6 +132,10 @@ func handleContainerEvent(engine *OrcEngine, event *adoc.Event) {
 			savePodStaHstry(engine, event)
 		case adoc.DockerEventStart:
 			savePodStaHstry(engine, event)
+		case adoc.DockerEventDie:
+			// operations like OOM, Stop, Kill all emit Die Event.
+			// so we can just handle Die event and skip OOM, Stop and Kill event
+			handleDieEvent(engine, event)
 		}
 	}
 }
