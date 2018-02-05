@@ -20,23 +20,30 @@ type EtcdStore struct {
 	keyHashes map[string]uint64
 }
 
-func (store *EtcdStore) Get(key string, v interface{}) error {
-	if resp, err := store.keysApi.Get(store.ctx, key, &client.GetOptions{Quorum: true}); err != nil {
+func (store *EtcdStore) GetRaw(key string) (string, error) {
+	resp, err := store.keysApi.Get(store.ctx, key, &client.GetOptions{Quorum: true})
+	if err != nil {
 		if cerr, ok := err.(client.Error); ok && cerr.Code == client.ErrorCodeKeyNotFound {
-			return storage.KMissingError
+			return "", storage.KMissingError
 		}
+		return "", err
+	}
+	if resp.Node == nil {
+		return "", storage.KNilNodeError
+	}
+	if resp.Node.Dir {
+		return "", storage.KDirNodeError
+	}
+	return resp.Node.Value, nil
+}
+
+func (store *EtcdStore) Get(key string, v interface{}) error {
+	value, err := store.GetRaw(key)
+	if err != nil {
 		return err
-	} else {
-		if resp.Node == nil {
-			return storage.KNilNodeError
-		}
-		if resp.Node.Dir {
-			return storage.KDirNodeError
-		}
-		value := resp.Node.Value
-		if err := json.Unmarshal([]byte(value), v); err != nil {
-			return err
-		}
+	}
+	if err := json.Unmarshal([]byte(value), v); err != nil {
+		return err
 	}
 	return nil
 }

@@ -13,6 +13,7 @@ var (
 
 type Store interface {
 	Get(key string, v interface{}) error
+	GetRaw(key string) (string, error)
 	Set(key string, v interface{}, force ...bool) error
 	SetWithTTL(key string, v interface{}, ttlSec int, force ...bool) error
 	Watch(key string) chan string

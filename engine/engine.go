@@ -761,6 +761,7 @@ func New(cluster cluster.Cluster, store storage.Store) (*OrcEngine, error) {
 		stop:         nil,
 		clstrFailCnt: 0,
 	}
+	configSpecsVars(store)
 	watchResource(store)
 	WatchEngineConfig(engine)
 
