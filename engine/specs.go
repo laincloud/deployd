@@ -5,8 +5,10 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/laincloud/deployd/storage"
 	"github.com/mijia/adoc"
 	"github.com/mijia/go-generics"
+	"github.com/mijia/sweb/log"
 )
 
 const (
@@ -21,16 +23,22 @@ const (
 	kLainLastPodSpecKey = "last_spec"
 	kLainPgOpingKey     = "operating"
 
-	kLainVolumeRoot      = "/data/lain/volumes"
-	kLainCloudVolumeRoot = "/data/lain/cloud-volumes"
-	kLainLabelPrefix     = "cc.bdp.lain.deployd"
-	kLainLogVolumePath   = "/lain/logs"
+	kLainLabelPrefix   = "cc.bdp.lain.deployd"
+	kLainLogVolumePath = "/lain/logs"
 
 	MinPodSetupTime = 0
 	MaxPodSetupTime = 300
 
 	MinPodKillTimeout = 10
 	MaxPodKillTimeout = 120
+
+	etcdCloudVolumeRootKey = "/lain/config/cloud_volumes_root"
+	etcdVolumeRootKey      = "/lain/config/volumes_root"
+)
+
+var (
+	kLainVolumeRoot      = "/data/lain/volumes"
+	kLainCloudVolumeRoot = "/data/lain/cloud-volumes"
 )
 
 type ImSpec struct {
@@ -49,6 +57,18 @@ type ContainerLabel struct {
 	DriftCount     int
 	ContainerIndex int
 	Annotation     string
+}
+
+func configSpecsVars(store storage.Store) error {
+	if v, err := store.GetRaw(etcdCloudVolumeRootKey); err == nil {
+		kLainCloudVolumeRoot = v
+	}
+
+	if v, err := store.GetRaw(etcdVolumeRootKey); err == nil {
+		kLainVolumeRoot = v
+	}
+	log.Debugf("cloud_volume_root: %s, volumes_root: %s", kLainCloudVolumeRoot, kLainVolumeRoot)
+	return nil
 }
 
 func (label ContainerLabel) NameAffinity() string {
