@@ -522,10 +522,12 @@ func (pc *podController) createHostConfig(index int) adoc.HostConfig {
 			BlkioDeviceWriteIOps = append(BlkioDeviceWriteIOps, iops)
 		}
 	}
+	swappiness := int64(0)
 	hc := adoc.HostConfig{
 		Resources: adoc.Resources{
 			Memory:               spec.MemoryLimit,
 			MemorySwap:           spec.MemoryLimit, // Memory == MemorySwap means disable swap
+			MemorySwappiness: 	  &swappiness,
 			CPUPeriod:            CPUQuota,
 			CPUQuota:             int64(spec.CpuLimit*resource.Cpu*CPUMaxPctg) * CPUQuota / int64(CPUMaxLevel*100),
 			BlkioDeviceReadBps:   BlkioDeviceReadBps,

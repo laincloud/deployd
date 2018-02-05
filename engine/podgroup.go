@@ -200,10 +200,6 @@ func (pgCtrl *podGroupController) RescheduleSpec(podSpec PodSpec) {
 	pgCtrl.RLock()
 	spec := pgCtrl.spec.Clone()
 	pgCtrl.RUnlock()
-	// pgCtrl.group.Pods[0].NodeName()
-	if spec.Pod.Equals(podSpec) {
-		return
-	}
 	pgCtrl.emptyError()
 	if ok := pgCtrl.updatePodPorts(podSpec); !ok {
 		return
@@ -502,9 +498,6 @@ func (pgCtrl *podGroupController) checkPodPorts() bool {
 
 func (pgCtrl *podGroupController) updatePodPorts(podSpec PodSpec) bool {
 	spec := pgCtrl.spec
-	if spec.Pod.Equals(podSpec) {
-		return true
-	}
 	var oldsps, sps StreamPorts
 	if err := json.Unmarshal([]byte(spec.Pod.Annotation), &oldsps); err != nil {
 		log.Errorf("annotation unmarshal error:%v\n", err)
