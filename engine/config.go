@@ -27,6 +27,8 @@ type Guard struct {
 const (
 	EtcdResourcesKey   = "/lain/config/resources"
 	EtcdGuardSwitchKey = "/lain/config/guardswitch"
+	EtcdCloudVolumeRootKey = "/lain/config/cloud_volumes_root"
+	EtcdVolumeRootKey      = "/lain/config/volumes_root"
 
 	EtcdConfigKey = "/lain/deployd/engine/config"
 

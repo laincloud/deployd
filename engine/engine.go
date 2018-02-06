@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/laincloud/deployd/cluster"
@@ -262,7 +263,7 @@ func (engine *OrcEngine) RescheduleSpec(name string, podSpec PodSpec) error {
 	if pgCtrl, ok := engine.pgCtrls[name]; !ok {
 		return ErrPodGroupNotExists
 	} else {
-		if err := canOperation(pgCtrl, PGOpStateScheduling); err != nil {
+		if err := canOperation(pgCtrl, PGOpStateUpgrading); err != nil {
 			return err
 		}
 		for _, depends := range podSpec.Dependencies {
@@ -567,10 +568,7 @@ func (engine *OrcEngine) initOperationWorker() {
 				rInterval := RefreshInterval / 2 * 1000 / len(engine.pgCtrls)
 				index := 0
 				for _, pgCtrl := range engine.pgCtrls {
-					pgCtrl.RLock()
-					refreshable := pgCtrl.refreshable
-					pgCtrl.RUnlock()
-					if refreshable {
+					if atomic.LoadInt32(&(pgCtrl.refreshable)) == 1 {
 						interval := index * rInterval
 						_pgCtrl := pgCtrl
 						index++
@@ -652,8 +650,8 @@ func (engine *OrcEngine) checkPodGroupRemoveResult(name string, pgCtrl *podGroup
 }
 
 func canOperation(pgCtrl *podGroupController, target PGOpState) error {
-	if opState := pgCtrl.CanOperate(target); opState != PGOpStateIdle {
-		return OperLockedError{info: opState.String()}
+	if canOp := pgCtrl.CanOperate(target); !canOp {
+		return OperLockedError{info: "Scheduling"}
 	}
 	return nil
 }

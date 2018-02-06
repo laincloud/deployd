@@ -181,7 +181,7 @@ func initOrcEngine(swarmAddr string, etcdAddr string, isDebug bool) (*engine.Orc
 		return nil, err
 	}
 
-	cluster, err := swarm.NewCluster(swarmAddr, 30*time.Second, 90*time.Second)
+	cluster, err := swarm.NewCluster(swarmAddr, 10*time.Second, 20*time.Second)
 	if err != nil {
 		return nil, err
 	}

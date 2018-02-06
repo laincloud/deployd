@@ -39,6 +39,7 @@ const (
 
 const (
 	PGOpStateIdle = iota
+	PGOpStateUpgrading
 	PGOpStateScheduling
 	PGOpStateDrifting
 	PGOpStateRemoving
@@ -102,6 +103,8 @@ func (pgos PGOpState) String() string {
 	switch pgos {
 	case PGOpStateIdle:
 		return "Idle"
+	case PGOpStateUpgrading:
+		return "Upgrading"
 	case PGOpStateScheduling:
 		return "Scheduling"
 	case PGOpStateDrifting:

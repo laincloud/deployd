@@ -158,6 +158,10 @@ func (op pgOperRefreshInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 		pgCtrl.RUnlock()
 	}()
 
+	if(op.instanceNo > len(pgCtrl.podCtrls)){
+		log.Warnf("Pod is not exists")
+		return false
+	}
 	podCtrl := pgCtrl.podCtrls[op.instanceNo-1]
 
 	podCtrl.Refresh(c)
@@ -604,6 +608,5 @@ type pgOperOver struct {
 
 func (op pgOperOver) Do(pgCtrl *podGroupController, c cluster.Cluster, store storage.Store, ev *RuntimeEagleView) bool {
 	pgCtrl.OperateOver()
-	pgCtrl.emitOperationEvent(OperationOver)
 	return false
 }

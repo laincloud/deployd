@@ -3,6 +3,7 @@ package engine
 import (
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/laincloud/deployd/utils/util"
 	"github.com/mijia/adoc"
@@ -76,13 +77,10 @@ func handleDieEvent(engine *OrcEngine, event *adoc.Event) {
 			if !ok {
 				return
 			}
-
 			pgCtrl.RLock()
-			state := pgCtrl.opState
 			spec := pgCtrl.spec.Clone()
 			pgCtrl.RUnlock()
-
-			if state != PGOpStateScheduling {
+			if atomic.LoadInt32((*int32)(&pgCtrl.opState)) != PGOpStateUpgrading {
 				log.Warnf("got %s event from %s, refresh this instance", event.Status, name)
 				pgCtrl.opsChan <- pgOperRefreshInstance{instance, spec}
 			}

@@ -32,8 +32,6 @@ const (
 	MinPodKillTimeout = 10
 	MaxPodKillTimeout = 120
 
-	etcdCloudVolumeRootKey = "/lain/config/cloud_volumes_root"
-	etcdVolumeRootKey      = "/lain/config/volumes_root"
 )
 
 var (
@@ -60,11 +58,11 @@ type ContainerLabel struct {
 }
 
 func configSpecsVars(store storage.Store) error {
-	if v, err := store.GetRaw(etcdCloudVolumeRootKey); err == nil {
+	if v, err := store.GetRaw(EtcdCloudVolumeRootKey); err == nil {
 		kLainCloudVolumeRoot = v
 	}
 
-	if v, err := store.GetRaw(etcdVolumeRootKey); err == nil {
+	if v, err := store.GetRaw(EtcdVolumeRootKey); err == nil {
 		kLainVolumeRoot = v
 	}
 	log.Debugf("cloud_volume_root: %s, volumes_root: %s", kLainCloudVolumeRoot, kLainVolumeRoot)

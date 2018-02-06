@@ -22,7 +22,7 @@ var RestartInfoClearInterval time.Duration
 
 const (
 	DefaultHealthInterval = 10
-	DefaultHealthTimeout  = 1
+	DefaultHealthTimeout  = 3
 	DefaultHealthRetries  = 3
 
 	DefaultSetUpTime = 20
@@ -32,7 +32,7 @@ const (
 	CPUMaxLevel     = 8
 	CPUDeafultLevel = 2
 
-	CURL_TMPLT = `echo $(timeout %v curl -s -o /dev/null -w '%%{http_code}\n' %s) | grep -Eq "^[2-3]..$"`
+	CURL_TMPLT = `echo $(curl -m %v -s -o /dev/null -w '%%{http_code}\n' %s) | grep -Eq "^[2-3]..$"`
 )
 
 // podController is controlled by the podGroupController
@@ -522,10 +522,12 @@ func (pc *podController) createHostConfig(index int) adoc.HostConfig {
 			BlkioDeviceWriteIOps = append(BlkioDeviceWriteIOps, iops)
 		}
 	}
+	swappiness := int64(0)
 	hc := adoc.HostConfig{
 		Resources: adoc.Resources{
 			Memory:               spec.MemoryLimit,
 			MemorySwap:           spec.MemoryLimit, // Memory == MemorySwap means disable swap
+			MemorySwappiness: 	  &swappiness,
 			CPUPeriod:            CPUQuota,
 			CPUQuota:             int64(spec.CpuLimit*resource.Cpu*CPUMaxPctg) * CPUQuota / int64(CPUMaxLevel*100),
 			BlkioDeviceReadBps:   BlkioDeviceReadBps,
