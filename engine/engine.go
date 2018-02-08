@@ -52,6 +52,7 @@ type OrcEngine struct {
 	dependsCtrls map[string]*dependsController
 	rmDepCtrls   map[string]*dependsController
 	opsChan      chan orcOperation
+	refreshAllChan chan bool
 	stop         chan struct{}
 	clstrFailCnt int
 }
@@ -554,6 +555,41 @@ func (engine *OrcEngine) clusterRequestSucceed() {
 	engine.clstrFailCnt = 0
 }
 
+func (engine *OrcEngine) refreshAllPodGroups() {
+	engine.RLock()
+	if len(engine.pgCtrls) > 0 {
+		rInterval := RefreshInterval / 2 * 1000 / len(engine.pgCtrls)
+		index := 0
+		for _, pgCtrl := range engine.pgCtrls {
+			if atomic.LoadInt32(&(pgCtrl.refreshable)) == 1 {
+				interval := index * rInterval
+				_pgCtrl := pgCtrl
+				index++
+				go func() {
+					log.Infof("%s will be refreshed after %d seconds", _pgCtrl, interval/1000)
+					time.Sleep(time.Duration(interval) * time.Millisecond)
+					engine.opsChan <- orcOperRefresh{_pgCtrl, false}
+				}()
+			}
+		}
+	}
+	if len(engine.dependsCtrls) > 0 {
+		rInterval := RefreshInterval / 2 * 1000 / len(engine.dependsCtrls)
+		index := 0
+		for _, depCtrl := range engine.dependsCtrls {
+			interval := index * rInterval
+			_depCtrl := depCtrl
+			index++
+			go func() {
+				log.Infof("%s will be refreshed after %d seconds", _depCtrl, interval/1000)
+				time.Sleep(time.Duration(RefreshInterval/2*1000+interval) * time.Millisecond)
+				engine.opsChan <- orcOperDependsRefresh{_depCtrl}
+			}()
+		}
+	}
+	engine.RUnlock()
+}
+
 // This will be running inside the go routine
 func (engine *OrcEngine) initOperationWorker() {
 	tick := time.Tick(time.Duration(RefreshInterval) * time.Second)
@@ -562,39 +598,10 @@ func (engine *OrcEngine) initOperationWorker() {
 		select {
 		case op := <-engine.opsChan:
 			op.Do(engine)
+		case <-engine.refreshAllChan:
+			engine.refreshAllPodGroups()
 		case <-tick:
-			engine.RLock()
-			if len(engine.pgCtrls) > 0 {
-				rInterval := RefreshInterval / 2 * 1000 / len(engine.pgCtrls)
-				index := 0
-				for _, pgCtrl := range engine.pgCtrls {
-					if atomic.LoadInt32(&(pgCtrl.refreshable)) == 1 {
-						interval := index * rInterval
-						_pgCtrl := pgCtrl
-						index++
-						go func() {
-							log.Infof("%s will be refreshed after %d seconds", _pgCtrl, interval/1000)
-							time.Sleep(time.Duration(interval) * time.Millisecond)
-							engine.opsChan <- orcOperRefresh{_pgCtrl, false}
-						}()
-					}
-				}
-			}
-			if len(engine.dependsCtrls) > 0 {
-				rInterval := RefreshInterval / 2 * 1000 / len(engine.dependsCtrls)
-				index := 0
-				for _, depCtrl := range engine.dependsCtrls {
-					interval := index * rInterval
-					_depCtrl := depCtrl
-					index++
-					go func() {
-						log.Infof("%s will be refreshed after %d seconds", _depCtrl, interval/1000)
-						time.Sleep(time.Duration(RefreshInterval/2*1000+interval) * time.Millisecond)
-						engine.opsChan <- orcOperDependsRefresh{_depCtrl}
-					}()
-				}
-			}
-			engine.RUnlock()
+			engine.refreshAllPodGroups()
 		case <-portsTick:
 			RefreshPorts(engine.pgCtrls)
 		case <-engine.stop:
@@ -687,7 +694,7 @@ func pgOpOver(store storage.Store, pgname string) {
 // kLainPgOpingKey
 
 func (engine *OrcEngine) onClusterNodeLost(nodeName string, downCount int) {
-	log.Warnf("Cluster node is down, [%q], %s nodes down in all, will check if need stop the engine", nodeName, downCount)
+	log.Warnf("Cluster node is down, [%q], %d nodes down in all, will check if need stop the engine", nodeName, downCount)
 	if downCount >= maxDownNode {
 		log.Warnf("Too many cluster nodes stoped in a short period, need stop the engine")
 		engine.Stop()
@@ -696,11 +703,10 @@ func (engine *OrcEngine) onClusterNodeLost(nodeName string, downCount int) {
 
 func (engine *OrcEngine) startClusterMonitor() {
 	restart := make(chan bool)
-	downTime := time.Now()
-	downCount := 0
+	downNodes := make(map[string]time.Time)
 	for {
-		successed := SyncEventsDataFromStorage(engine)
-		if !successed {
+		succeed := SyncEventsDataFromStorage(engine)
+		if !succeed {
 			time.Sleep(1 * time.Hour)
 		} else {
 			break
@@ -718,13 +724,21 @@ func (engine *OrcEngine) startClusterMonitor() {
 				switch event.Status {
 				case "engine_disconnect":
 					now := time.Now()
-					if downTime.Add(downNodeResetPeriod).Before(now) {
-						downCount = 1
-						downTime = time.Now()
-					} else {
-						downCount += 1
+					log.Warnf("got engine disconnect event from %s, downTime: %v", event.Node.Name, now)
+					downNodes[event.Node.Name] = now
+					downCount := 0
+					for _, v := range downNodes {
+						if v.Add(downNodeResetPeriod).After(now) {
+							downCount++
+						}
 					}
 					engine.onClusterNodeLost(event.Node.Name, downCount)
+				case "engine_connect":
+					log.Infof("got engine connect event from %s", event.Node.Name)
+					if _, ok := downNodes[event.Node.Name]; ok {
+						delete(downNodes, event.Node.Name)
+						engine.refreshAllChan <- true
+					}
 				}
 			} else {
 				HandleDockerEvent(engine, &event)
