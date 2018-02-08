@@ -297,6 +297,7 @@ func (pgCtrl *podGroupController) Refresh(force bool) {
 	if pgCtrl.IsRemoved() || pgCtrl.IsPending() {
 		return
 	}
+	pgCtrl.emitOperationEvent(OperationStart)
 	pgCtrl.DisableRefresh()
 	defer func() {
 		pgCtrl.opsChan <- pgOperOver{}
