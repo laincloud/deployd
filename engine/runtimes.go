@@ -23,6 +23,7 @@ const (
 	RunStateMissing
 	RunStateRemoved
 	RunStatePaused
+	RunStateError // call docker interface with error
 )
 
 const (
@@ -68,6 +69,8 @@ func (rs RunState) String() string {
 		return "RunStateRemoved"
 	case RunStatePaused:
 		return "RunStatePaused"
+	case RunStateError:
+		return "RunStateError"
 	default:
 		return "Unknown RunState"
 	}
