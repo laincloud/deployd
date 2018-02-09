@@ -14,15 +14,16 @@ type PGOpState int32
 var RestartMaxCount int
 
 const (
-	RunStatePending = iota
-	RunStateDrift
-	RunStateSuccess
-	RunStateExit
-	RunStateFail
-	RunStateInconsistent
-	RunStateMissing
-	RunStateRemoved
-	RunStatePaused
+	RunStatePending = iota // waiting for operation
+	RunStateDrift          // drifting from one node to another
+	RunStateSuccess        // ok
+	RunStateExit           // exited
+	RunStateFail           // start failed with error
+	RunStateInconsistent   // container's state is different between deployd and swarm
+	RunStateMissing        // container is missing and need create it. happened when node down .etc
+	RunStateRemoved        // removed
+	RunStatePaused         // paused
+	RunStateError          // call docker interface with error
 )
 
 const (
@@ -68,6 +69,8 @@ func (rs RunState) String() string {
 		return "RunStateRemoved"
 	case RunStatePaused:
 		return "RunStatePaused"
+	case RunStateError:
+		return "RunStateError"
 	default:
 		return "Unknown RunState"
 	}

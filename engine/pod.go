@@ -87,7 +87,7 @@ func (pc *podController) Deploy(cluster cluster.Cluster) {
 		id, err := pc.createContainer(cluster, filters, i)
 		if err != nil {
 			log.Warnf("%s Cannot create container, error=%q, spec=%+v", pc, err, cSpec)
-			pc.pod.State = RunStateFail
+			pc.pod.State = RunStateError
 			pc.pod.LastError = fmt.Sprintf("Cannot create container, %s", err)
 			return
 		}
@@ -187,7 +187,7 @@ func (pc *podController) Stop(cluster cluster.Cluster) {
 	for i, container := range pc.pod.Containers {
 		if err := cluster.StopContainer(container.Id, pc.spec.GetKillTimeout()); err != nil {
 			log.Warnf("%s Cannot stop the container %s, %s", pc, container.Id, err)
-			pc.pod.State = RunStateFail
+			pc.pod.State = RunStateError
 			pc.pod.LastError = fmt.Sprintf("Cannot stop container, %s", err)
 		} else {
 			pc.refreshContainer(cluster, i)
@@ -212,7 +212,7 @@ func (pc *podController) Start(cluster cluster.Cluster) {
 			pc.refreshContainer(cluster, i)
 		} else {
 			log.Warnf("%s Cannot start the container %s, %s", pc, container.Id, err)
-			pc.pod.State = RunStateFail
+			pc.pod.State = RunStateError
 			pc.pod.LastError = fmt.Sprintf("Cannot start container, %s", err)
 		}
 	}
@@ -231,7 +231,7 @@ func (pc *podController) Restart(cluster cluster.Cluster) {
 	for i, container := range pc.pod.Containers {
 		if err := cluster.RestartContainer(container.Id, pc.spec.GetKillTimeout()); err != nil {
 			log.Warnf("%s Cannot restart the container %s, %s", pc, container.Id, err)
-			pc.pod.State = RunStateFail
+			pc.pod.State = RunStateError
 			pc.pod.LastError = fmt.Sprintf("Cannot restart container, %s", err)
 		} else {
 			pc.refreshContainer(cluster, i)
@@ -285,7 +285,7 @@ func (pc *podController) startContainer(cluster cluster.Cluster, id string) erro
 				log.Warnf("%s Cannot release IP %s, %s", pc, id, err)
 			}
 		}
-		pc.pod.State = RunStateFail
+		pc.pod.State = RunStateError
 		pc.pod.LastError = fmt.Sprintf("Cannot start container, %s", err)
 		return err
 	}
@@ -329,7 +329,7 @@ func (pc *podController) refreshContainer(kluster cluster.Cluster, index int) {
 			pc.pod.LastError = fmt.Sprintf("Missing container %q, %s", id, err)
 		} else {
 			log.Warnf("%s Failed to inspect container %s, %s", pc, id, err)
-			pc.pod.State = RunStateFail
+			pc.pod.State = RunStateError
 			pc.pod.LastError = fmt.Sprintf("Cannot inspect the container, %s", err)
 		}
 	} else {

@@ -253,7 +253,7 @@ func (op pgOperRefreshInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 			runtime = podCtrl.pod.ImRuntime
 			consistent = false
 		}
-	} else if runtime.State == RunStateExit {
+	} else if runtime.State == RunStateExit || runtime.State == RunStateFail {
 		if !pgCtrl.engine.config.Maintenance && podCtrl.pod.NeedRestart(op.spec.RestartPolicy) {
 			if podCtrl.pod.RestartEnoughTimes() {
 				ntfController.Send(NewNotifySpec(podCtrl.spec.Namespace, podCtrl.spec.Name,
@@ -583,18 +583,18 @@ func (op pgOperChangeState) Do(pgCtrl *podGroupController, c cluster.Cluster, st
 	switch op.op {
 	case "start":
 		podCtrl.Start(c)
-		if podCtrl.pod.State != RunStateFail {
+		if podCtrl.pod.State != RunStateError {
 			podCtrl.pod.ChangeTargetState(ExpectStateRun)
 		}
 	case "stop":
 		podCtrl.Stop(c)
-		if podCtrl.pod.State != RunStateFail {
+		if podCtrl.pod.State != RunStateError {
 			podCtrl.pod.ChangeTargetState(ExpectStateStop)
 		}
 	case "restart":
 		pgCtrl.waitLastPodHealth(op.instance)
 		podCtrl.Restart(c)
-		if podCtrl.pod.State != RunStateFail {
+		if podCtrl.pod.State != RunStateError {
 			podCtrl.pod.ChangeTargetState(ExpectStateRun)
 		}
 	}
