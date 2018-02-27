@@ -24,6 +24,7 @@ var (
 	NotifyPodUnHealthy = "LAIN found pod Unhealthy, please check your service"
 
 	NotifyClusterUnHealthy = "LAIN found Cluster Manager Unhealthy, please check your cluster"
+	NotifyClusterAbnormal = "LAIN found too many cluster nodes stoped in a short period, need stop the engine, please check your cluster"
 
 	NotifyUpgradeFailedTmplt = "LAIN found Last version:%d upgrade is terrrible, please check your code carefully!!"
 )

@@ -697,6 +697,8 @@ func (engine *OrcEngine) onClusterNodeLost(nodeName string, downCount int) {
 	log.Warnf("Cluster node is down, [%q], %d nodes down in all, will check if need stop the engine", nodeName, downCount)
 	if downCount >= maxDownNode {
 		log.Warnf("Too many cluster nodes stoped in a short period, need stop the engine")
+		ntfController.Send(NewNotifySpec("Cluster", "Deployd",
+			1, time.Now(), NotifyClusterAbnormal))
 		engine.Stop()
 	}
 }

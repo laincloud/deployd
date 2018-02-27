@@ -84,6 +84,7 @@ func (e *Elector) watch(leaderCh chan string, stop chan struct{}) {
 		}
 		retry = 0
 
+		// libkv locker refresh ttl every ttl / 3, so will receive data each refresh time.
 		for kv := range ch {
 			value := string(kv.Value)
 			log.Debugf("Get watch event, leader value changed to %s", value)
