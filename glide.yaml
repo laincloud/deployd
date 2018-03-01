@@ -10,7 +10,7 @@ import:
   - store
   - store/etcd
 - package: github.com/mijia/adoc
-  version: 1ef227e439ebbac803b4b9ec6f9a111edd4d6831
+  version: 61dbc8d45a4512b5e1e5c1ff25773cee578418b9
 - package: github.com/mijia/go-generics
 - package: github.com/mijia/sweb
   subpackages:

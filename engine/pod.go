@@ -148,6 +148,42 @@ func (pc *podController) Drift(cluster cluster.Cluster, fromNode, toNode string,
 	return true
 }
 
+func (pc *podController) Update(cluster cluster.Cluster) error {
+	log.Infof("%s updating", pc)
+	start := time.Now()
+	defer func() {
+		pc.spec.Filters = []string{} // clear the filter
+		pc.pod.UpdatedAt = time.Now()
+		log.Infof("%s updated, state=%+v, duration=%s", pc, pc.pod.ImRuntime, time.Now().Sub(start))
+	}()
+	var err error
+	for i, cSpec := range pc.spec.Containers {
+		e := pc.updateContainer(cluster, i)
+		if e != nil {
+			log.Warnf("%s Cannot update container, error=%q, spec=%+v", pc, err, cSpec)
+			if err == nil {
+				err = e
+			}
+		}
+		id := pc.pod.Containers[i].Id
+		pc.startContainer(cluster, id)
+		pc.refreshContainer(cluster, i)
+		if i == 0 && pc.pod.Containers[0].NodeName != "" {
+			pc.spec.PrevState.NodeName = pc.pod.Containers[i].NodeName
+		}
+		pc.spec.PrevState.IPs[i] = pc.pod.Containers[i].ContainerIp
+	}
+	if pc.pod.State == RunStatePending {
+		if err == nil {
+			pc.pod.State = RunStateSuccess
+		} else {
+			pc.pod.State = RunStateError
+		}
+		pc.pod.TargetState = ExpectStateRun
+	}
+	return err
+}
+
 func (pc *podController) Remove(cluster cluster.Cluster) {
 	log.Infof("%s removing", pc)
 	start := time.Now()
@@ -338,6 +374,7 @@ func (pc *podController) refreshContainer(kluster cluster.Cluster, index int) {
 		if network == "" {
 			network = pc.spec.Namespace
 		}
+		log.Infof("pc.spec.PrevState.IPs:%v", pc.spec.PrevState.IPs)
 		prevIP, nowIP := pc.spec.PrevState.IPs[index], info.NetworkSettings.Networks[network].IPAddress
 		// NOTE: if the container's ip is not equal to prev ip, try to correct it; if failed, accpet new ip
 		if prevIP != "" && prevIP != nowIP {
@@ -404,6 +441,19 @@ func (pc *podController) createContainer(cluster cluster.Cluster, filters []stri
 	nc := pc.createNetworkingConfig(index)
 	name := pc.createContainerName(index)
 	return cluster.CreateContainer(cc, hc, nc, name)
+}
+
+func (pc *podController) updateContainer(cluster cluster.Cluster, index int) error {
+	podSpec := pc.spec
+	spec := podSpec.Containers[index]
+	id := pc.pod.Containers[index].Id
+	config := &CUpdateConfig{
+		Memory:     spec.MemoryLimit,
+		MemorySwap: spec.MemoryLimit, // Memory == MemorySwap means disable swap
+		CPUPeriod:  CPUQuota,
+		CPUQuota:   int64(spec.CpuLimit*resource.Cpu*CPUMaxPctg) * CPUQuota / int64(CPUMaxLevel*100),
+	}
+	return cluster.UpdateContainer(id, config)
 }
 
 func (pc *podController) createContainerConfig(filters []string, index int) adoc.ContainerConfig {
@@ -527,7 +577,7 @@ func (pc *podController) createHostConfig(index int) adoc.HostConfig {
 		Resources: adoc.Resources{
 			Memory:               spec.MemoryLimit,
 			MemorySwap:           spec.MemoryLimit, // Memory == MemorySwap means disable swap
-			MemorySwappiness: 	  &swappiness,
+			MemorySwappiness:     &swappiness,
 			CPUPeriod:            CPUQuota,
 			CPUQuota:             int64(spec.CpuLimit*resource.Cpu*CPUMaxPctg) * CPUQuota / int64(CPUMaxLevel*100),
 			BlkioDeviceReadBps:   BlkioDeviceReadBps,
