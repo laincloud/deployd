@@ -31,7 +31,6 @@ const (
 
 	MinPodKillTimeout = 10
 	MaxPodKillTimeout = 120
-
 )
 
 var (
@@ -441,7 +440,6 @@ func (s PodSpec) Merge(o PodSpec) PodSpec {
 	s.Stateful = o.Stateful
 	s.Version += 1
 	s.UpdatedAt = time.Now()
-	s.PrevState = o.PrevState
 	s.SetupTime = o.SetupTime
 	s.KillTimeout = o.KillTimeout
 	s.HealthConfig = o.HealthConfig
