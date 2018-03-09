@@ -33,6 +33,7 @@ type Cluster interface {
 	InspectContainer(id string) (adoc.ContainerDetail, error)
 	RemoveContainer(id string, force bool, volumes bool) error
 	RenameContainer(id string, name string) error
+	UpdateContainer(id string, config interface{}) error 
 
 	MonitorEvents(filter string, callback adoc.EventCallback) int64
 	StopMonitor(monitorId int64)

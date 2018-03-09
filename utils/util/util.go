@@ -48,6 +48,15 @@ func ParseContainerName(containerName string) (string, int, int, int, error) {
 	return g.Group(1), version, instance, driftCount, nil
 }
 
+func PodGroupType(procName string) string {
+	p := regex.MustCompile(`.*\.(.*)\..*`)
+	g := p.Match(procName)
+	if g == nil {
+		return ""
+	}
+	return g.Group(1)
+}
+
 func IpConflictErrorMatch(err string) string {
 	p := regex.MustCompile(`IP assignment error, data: {IP:([0-9.]+) HandleID:(.*)}: Address already assigned in block`)
 	g := p.Match(err)

@@ -129,8 +129,8 @@ func TestEnginePodGroup(t *testing.T) {
 	time.Sleep(40 * time.Second)
 	if pg, ok := engine.InspectPodGroup(name); !ok {
 		t.Errorf("We should have the pod group, but we don't get it")
-	} else if pg.Spec.Version != 2 {
-		t.Errorf("We should have version 2 of the pods")
+	} else if pg.Spec.Version != 1 {
+		t.Errorf("We should have version 1 of the pods")
 	}
 
 	if err := engine.RemovePodGroup(name); err != nil {

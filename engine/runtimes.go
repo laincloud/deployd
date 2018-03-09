@@ -1,9 +1,9 @@
 package engine
 
 import (
-	"github.com/mijia/adoc"
-	"github.com/mijia/sweb/log"
 	"time"
+
+	"github.com/mijia/adoc"
 )
 
 type RunState int
@@ -14,16 +14,16 @@ type PGOpState int32
 var RestartMaxCount int
 
 const (
-	RunStatePending = iota // waiting for operation
-	RunStateDrift          // drifting from one node to another
-	RunStateSuccess        // ok
-	RunStateExit           // exited
-	RunStateFail           // start failed with error
-	RunStateInconsistent   // container's state is different between deployd and swarm
-	RunStateMissing        // container is missing and need create it. happened when node down .etc
-	RunStateRemoved        // removed
-	RunStatePaused         // paused
-	RunStateError          // call docker interface with error
+	RunStatePending      = iota // waiting for operation
+	RunStateDrift               // drifting from one node to another
+	RunStateSuccess             // ok
+	RunStateExit                // exited
+	RunStateFail                // start failed with error
+	RunStateInconsistent        // container's state is different between deployd and swarm
+	RunStateMissing             // container is missing and need create it. happened when node down .etc
+	RunStateRemoved             // removed
+	RunStatePaused              // paused
+	RunStateError               // call docker interface with error
 )
 
 const (
@@ -251,7 +251,6 @@ func (pod Pod) PodIp() string {
 
 func (pod *Pod) ChangeTargetState(state ExpectState) {
 	pod.TargetState = state
-	log.Infof("target state:::%v", state)
 }
 
 type PodGroup struct {

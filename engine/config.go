@@ -24,9 +24,16 @@ type Guard struct {
 	Working bool `json:"Working"`
 }
 
+type CUpdateConfig struct {
+	CPUPeriod  int64 `json:"CpuPeriod,omitempty"`  // CPU CFS (Completely Fair Scheduler) period
+	CPUQuota   int64 `json:"CpuQuota,omitempty"`   // CPU CFS (Completely Fair Scheduler) quota
+	Memory     int64 `json:"Memory,omitempty"`     // Memory limit (in bytes)
+	MemorySwap int64 `json:"MemorySwap,omitempty"` // Total memory usage (memory + swap); set `-1` to enable unlimited swap
+}
+
 const (
-	EtcdResourcesKey   = "/lain/config/resources"
-	EtcdGuardSwitchKey = "/lain/config/guardswitch"
+	EtcdResourcesKey       = "/lain/config/resources"
+	EtcdGuardSwitchKey     = "/lain/config/guardswitch"
 	EtcdCloudVolumeRootKey = "/lain/config/cloud_volumes_root"
 	EtcdVolumeRootKey      = "/lain/config/volumes_root"
 

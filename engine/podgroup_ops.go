@@ -158,7 +158,7 @@ func (op pgOperRefreshInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 		pgCtrl.RUnlock()
 	}()
 
-	if(op.instanceNo > len(pgCtrl.podCtrls)){
+	if op.instanceNo > len(pgCtrl.podCtrls) {
 		log.Warnf("Pod is not exists")
 		return false
 	}
@@ -310,6 +310,33 @@ func (op pgOperVerifyInstanceCount) Do(pgCtrl *podGroupController, c cluster.Clu
 			c.RemoveContainer(cId, true, false)
 			rmCount++
 		}
+	}
+	return false
+}
+
+type pgOperUpdateInsConfig struct {
+	instanceNo int
+	version    int
+	oldPodSpec PodSpec
+	newPodSpec PodSpec
+}
+
+func (op pgOperUpdateInsConfig) Do(pgCtrl *podGroupController, c cluster.Cluster, store storage.Store, ev *RuntimeEagleView) bool {
+	var runtime ImRuntime
+	start := time.Now()
+	defer func() {
+		pgCtrl.RLock()
+		log.Infof("%s update instance, op=%+v, runtime=%+v, duration=%s", pgCtrl, op, runtime, time.Now().Sub(start))
+		pgCtrl.RUnlock()
+	}()
+	podCtrl := pgCtrl.podCtrls[op.instanceNo-1]
+	newPodSpec := op.newPodSpec.Clone()
+	newPodSpec.PrevState = podCtrl.spec.PrevState.Clone() // upgrade action, state should not changed
+	podCtrl.spec = newPodSpec
+	podCtrl.pod.State = RunStatePending
+	if err := podCtrl.Update(c); err != nil {
+		lowOp := pgOperUpgradeInstance{op.instanceNo, op.version, op.oldPodSpec, op.newPodSpec}
+		lowOp.Do(pgCtrl, c, store, ev)
 	}
 	return false
 }

@@ -24,6 +24,16 @@ type PodGroupWithSpec struct {
 	PodGroup
 }
 
+// type PodGroupController interface {
+// 	Deploy()
+// 	Remove()
+// 	Inspect() PodGroupWithSpec
+// 	RescheduleSpec(podSpec PodSpec)
+// 	RescheduleInstance(numInstances int, restartPolicy ...RestartPolicy)
+// 	RescheduleDrift(fromNode, toNode string, instanceNo int, force bool)
+// 	ChangeState(op string, instance int)
+// }
+
 type podGroupController struct {
 	Publisher
 
@@ -204,13 +214,17 @@ func (pgCtrl *podGroupController) RescheduleSpec(podSpec PodSpec) {
 	if ok := pgCtrl.updatePodPorts(podSpec); !ok {
 		return
 	}
-	// store oldPodSpec for rollback(with ttl 10min)
-	pgCtrl.opsChan <- pgOperCacheLastSpec{spec: spec}
-
 	oldPodSpec := spec.Pod.Clone()
 	spec.Pod = spec.Pod.Merge(podSpec)
-	spec.Version += 1
 	spec.UpdatedAt = time.Now()
+	reDeploy := shouldReDeploy(oldPodSpec, podSpec)
+	if reDeploy {
+		// store oldPodSpec for rollback(with ttl 10min)
+		pgCtrl.opsChan <- pgOperCacheLastSpec{spec: spec}
+		spec.Version += 1
+	} else {
+		spec.Pod.Version -= 1
+	}
 	pgCtrl.Lock()
 	pgCtrl.spec = spec
 	pgCtrl.Unlock()
@@ -218,7 +232,11 @@ func (pgCtrl *podGroupController) RescheduleSpec(podSpec PodSpec) {
 	pgCtrl.opsChan <- pgOperSaveStore{true}
 	pgCtrl.opsChan <- pgOperSnapshotEagleView{spec.Name}
 	for i := 0; i < spec.NumInstances; i += 1 {
-		pgCtrl.opsChan <- pgOperUpgradeInstance{i + 1, spec.Version, oldPodSpec, spec.Pod}
+		if reDeploy {
+			pgCtrl.opsChan <- pgOperUpgradeInstance{i + 1, spec.Version, oldPodSpec, spec.Pod}
+		} else {
+			pgCtrl.opsChan <- pgOperUpdateInsConfig{i + 1, spec.Version, oldPodSpec, spec.Pod}
+		}
 		pgCtrl.opsChan <- pgOperSnapshotGroup{true}
 		pgCtrl.opsChan <- pgOperSaveStore{true}
 	}
@@ -336,7 +354,6 @@ func (pgCtrl *podGroupController) Activate(c cluster.Cluster, store storage.Stor
 }
 
 func (pgCtrl *podGroupController) LastSpec() *PodGroupSpec {
-	log.Infof("Fetch LastPodSpec !")
 	var lastSpec PodGroupSpec
 	if err := pgCtrl.engine.store.Get(pgCtrl.lastPodSpecKey, &lastSpec); err != nil {
 		log.Infof("Fetch LastPodSpec with err:%v", err)
@@ -704,4 +721,18 @@ func newPodGroupController(spec PodGroupSpec, states []PodPrevState, pg PodGroup
 	}
 	pgCtrl.Publisher = NewPublisher(true)
 	return pgCtrl
+}
+
+// Assume reschedule spec operation change MemoryLimit or CpuLimit will not change other pod spec
+func shouldReDeploy(oldSpec, newSpec PodSpec) bool {
+	if len(oldSpec.Containers) != len(newSpec.Containers) {
+		return true
+	}
+	for i, _ := range newSpec.Containers {
+		if oldSpec.Containers[i].MemoryLimit != newSpec.Containers[i].MemoryLimit ||
+			oldSpec.Containers[i].CpuLimit != newSpec.Containers[i].CpuLimit {
+			return false
+		}
+	}
+	return true
 }
