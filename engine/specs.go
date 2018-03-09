@@ -22,6 +22,7 @@ const (
 	kLainNodesKey       = "nodes"
 	kLainLastPodSpecKey = "last_spec"
 	kLainPgOpingKey     = "operating"
+	kLainCanaryKey      = "canaries"
 
 	kLainLabelPrefix   = "cc.bdp.lain.deployd"
 	kLainLogVolumePath = "/lain/logs"
@@ -31,6 +32,8 @@ const (
 
 	MinPodKillTimeout = 10
 	MaxPodKillTimeout = 120
+
+	PGCanaryType = "canary"
 )
 
 var (

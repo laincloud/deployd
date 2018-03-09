@@ -54,3 +54,10 @@ func Test_timeMarshal(t *testing.T) {
 	data, _ := json.Marshal(tt)
 	fmt.Println("t:", string(data))
 }
+
+func Test_PGType(t *testing.T) {
+	pgName := "hello.canary.web"
+	if pgType := PodGroupType(pgName); pgType != "canary" {
+		t.Fatalf("pgtype %s should be canary", pgType)
+	}
+}

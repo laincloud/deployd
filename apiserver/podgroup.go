@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/laincloud/deployd/engine"
+	"github.com/laincloud/deployd/utils/util"
 	"github.com/mijia/sweb/form"
 	"github.com/mijia/sweb/log"
 	"github.com/mijia/sweb/server"
@@ -26,12 +27,25 @@ func (rpg RestfulPodGroups) Post(ctx context.Context, r *http.Request) (int, int
 	}
 
 	orcEngine := getEngine(ctx)
-	if err := orcEngine.NewPodGroup(pgSpec); err != nil {
-		switch err {
+	var deployErr error
+	if util.PodGroupType(pgSpec.Name) == engine.PGCanaryType {
+		var canary engine.Canary
+		if err := form.ParamBodyJson(r, &canary); err != nil {
+			log.Warnf("Failed to decode canary, %s", err)
+			return http.StatusBadRequest, fmt.Sprintf("Invalid Canary params format: %s", err)
+		}
+		canaryPgSpec := engine.CanaryPodsWithSpec{pgSpec, &canary}
+		deployErr = orcEngine.NewCanary(canaryPgSpec)
+
+	} else {
+		deployErr = orcEngine.NewPodGroup(pgSpec)
+	}
+	if deployErr != nil {
+		switch deployErr {
 		case engine.ErrNotEnoughResources, engine.ErrPodGroupExists, engine.ErrDependencyPodNotExists:
-			return http.StatusMethodNotAllowed, err.Error()
+			return http.StatusMethodNotAllowed, deployErr.Error()
 		default:
-			return http.StatusInternalServerError, err.Error()
+			return http.StatusInternalServerError, deployErr.Error()
 		}
 	}
 

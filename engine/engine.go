@@ -10,6 +10,7 @@ import (
 
 	"github.com/laincloud/deployd/cluster"
 	"github.com/laincloud/deployd/storage"
+	"github.com/laincloud/deployd/utils/util"
 	"github.com/mijia/adoc"
 	"github.com/mijia/sweb/log"
 )
@@ -43,18 +44,18 @@ type EngineConfig struct {
 type OrcEngine struct {
 	sync.RWMutex
 
-	config       EngineConfig
-	cluster      cluster.Cluster
-	store        storage.Store
-	eagleView    *RuntimeEagleView
-	pgCtrls      map[string]*podGroupController
-	rmPgCtrls    map[string]*podGroupController
-	dependsCtrls map[string]*dependsController
-	rmDepCtrls   map[string]*dependsController
-	opsChan      chan orcOperation
+	config         EngineConfig
+	cluster        cluster.Cluster
+	store          storage.Store
+	eagleView      *RuntimeEagleView
+	pgCtrls        map[string]*podGroupController
+	rmPgCtrls      map[string]*podGroupController
+	dependsCtrls   map[string]*dependsController
+	rmDepCtrls     map[string]*dependsController
+	opsChan        chan orcOperation
 	refreshAllChan chan bool
-	stop         chan struct{}
-	clstrFailCnt int
+	stop           chan struct{}
+	clstrFailCnt   int
 }
 
 const (
@@ -236,10 +237,16 @@ func (engine *OrcEngine) RemovePodGroup(name string) error {
 			return err
 		}
 		log.Infof("start delete %v\n", name)
+		// if is canary podgroup remove canary strategy
+		if util.PodGroupType(name) == PGCanaryType {
+			// remove key
+			pgCtrl.spec.RemoveCanary(engine.store)
+		}
 		engine.opsChan <- orcOperRemove{pgCtrl}
 		delete(engine.pgCtrls, name)
 		engine.rmPgCtrls[name] = pgCtrl
 		go engine.checkPodGroupRemoveResult(name, pgCtrl)
+
 		return nil
 	}
 }
@@ -284,7 +291,6 @@ func (engine *OrcEngine) RescheduleSpec(name string, podSpec PodSpec) error {
 			pgCtrl.opsChan <- pgOperSaveStore{true}
 			pgCtrl.opsChan <- pgOperOver{}
 		}
-
 		return nil
 	}
 }
@@ -327,6 +333,40 @@ func (engine *OrcEngine) ChangeState(pgName, op string, instance int) error {
 		return ErrPodGroupNotExists
 	}
 	return nil
+}
+
+func (engine *OrcEngine) NewCanary(spec CanaryPodsWithSpec) error {
+	if err := engine.NewPodGroup(spec.PodGroupSpec); err != nil {
+		return err
+	}
+	// gen canary strategy
+	spec.SaveCanary(engine.store)
+	return nil
+}
+
+func (engine *OrcEngine) FetchCanaryInfos(name string) *Canary {
+	engine.RLock()
+	defer engine.RUnlock()
+	if pgCtrl, ok := engine.pgCtrls[name]; !ok {
+		return nil
+	} else {
+		if canary, err := pgCtrl.spec.FetchCanary(engine.store); err != nil {
+			return nil
+		} else {
+			return canary
+		}
+	}
+	return nil
+}
+
+func (engine *OrcEngine) UpdateCanaryInfos(name string, canary *Canary) error {
+	engine.RLock()
+	defer engine.RUnlock()
+	if pgCtrl, ok := engine.pgCtrls[name]; !ok {
+		return ErrPodGroupNotExists
+	} else {
+		return pgCtrl.spec.UpdateCanary(engine.store, canary)
+	}
 }
 
 func (engine *OrcEngine) hasEnoughResource(pgCtrl *podGroupController, podSpec PodSpec) bool {

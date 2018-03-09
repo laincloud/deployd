@@ -24,6 +24,16 @@ type PodGroupWithSpec struct {
 	PodGroup
 }
 
+// type PodGroupController interface {
+// 	Deploy()
+// 	Remove()
+// 	Inspect() PodGroupWithSpec
+// 	RescheduleSpec(podSpec PodSpec)
+// 	RescheduleInstance(numInstances int, restartPolicy ...RestartPolicy)
+// 	RescheduleDrift(fromNode, toNode string, instanceNo int, force bool)
+// 	ChangeState(op string, instance int)
+// }
+
 type podGroupController struct {
 	Publisher
 
