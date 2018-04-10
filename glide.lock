@@ -1,5 +1,5 @@
-hash: 4b3703df181c1867550a50e50d6bbc3a97add723f92757999c81a0a9a15faecd
-updated: 2017-12-25T11:45:15.045528833+08:00
+hash: dad8233b2d6bd8818d54332e18ec21ee683ab1e623a65a15d28958e7d1c24ece
+updated: 2018-03-27T22:27:38.000251205+08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -23,6 +23,10 @@ imports:
   - key
   - oauth2
   - oidc
+- name: github.com/coreos/go-semver
+  version: 8ab6407b697782a06568d4b7f1db25550ec2e4c6
+  subpackages:
+  - semver
 - name: github.com/coreos/go-systemd
   version: 48702e0da86bd25e76cfef347e2adeb434a0d0a6
   subpackages:

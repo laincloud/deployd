@@ -24,3 +24,7 @@ import:
   version: ^1.2.2
   subpackages:
   - lib
+- package: github.com/coreos/go-semver
+  version: ^0.2.0
+  subpackages:
+  - semver
