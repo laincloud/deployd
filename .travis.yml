@@ -8,11 +8,11 @@ services:
 - docker
 
 install:
-- go get github.com/Masterminds/glide
+- go get -u github.com/golang/dep/cmd/dep
 - go get github.com/aliyun/ossutil
 
 before_script:
-- glide install
+- dep ensure
 - echo 'DOCKER_OPTS="-H tcp://0.0.0.0:2375 -H unix:///var/run/docker.sock --cluster-store=etcd://127.0.0.1:2379 -s devicemapper"' | sudo tee /etc/default/docker > /dev/null
 - sudo service docker restart
 - ip=$(ip addr show eth0| grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*')
@@ -24,7 +24,7 @@ before_script:
 - docker pull swarm:1.2.8
 - docker run -d --name swarm-manage.service -p 2376:2375 swarm:1.2.8 manage --replication --addr=$ip:2376 etcd://$ip:2379/lain/swarm
 - docker run -d --name swarm-agent.service swarm:1.2.8 join --addr=$ip:2375 etcd://$ip:2379/lain/swarm
-- docker ps -a 
+- docker ps -a
 - docker -H :2376 info
 script:
 - go build -o bin/deployd main.go

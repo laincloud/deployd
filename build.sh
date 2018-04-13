@@ -1,6 +1,6 @@
 #!/bin/bash
 
-glide install
+dep ensure
 REPO_PATH=github.com/laincloud/deployd
 GIT_SHA=$(git rev-parse --short HEAD || echo "GitNotFound")
 
