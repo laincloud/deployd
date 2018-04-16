@@ -14,16 +14,13 @@ import (
 	"github.com/laincloud/deployd/engine"
 	"github.com/laincloud/deployd/utils/elector"
 	"github.com/laincloud/deployd/utils/proxy"
+	"github.com/laincloud/deployd/version"
 	"github.com/mijia/sweb/log"
-)
-
-const (
-	VERSION = "2.4.1"
 )
 
 func main() {
 	var webAddr, swarmAddr, etcdAddr, advertise string
-	var isDebug, version bool
+	var isDebug, V bool
 	var refreshInterval, dependsGCTime, maxRestartTimes, restartInfoClearInterval int
 
 	flag.StringVar(&advertise, "advertise", "", "The address advertise to other peers, this will open HA mode")
@@ -35,11 +32,14 @@ func main() {
 	flag.IntVar(&maxRestartTimes, "maxRestartTimes", 3, "The max restart times for pod")
 	flag.IntVar(&restartInfoClearInterval, "restartInfoClearInterval", 30, "The interval to clear restart info (minutes)")
 	flag.BoolVar(&isDebug, "debug", false, "Debug mode switch")
-	flag.BoolVar(&version, "version", false, "Show version")
+	flag.BoolVar(&V, "version", false, "Show version")
 	flag.Parse()
 
-	if version {
-		println("deployd", VERSION)
+	if V {
+		fmt.Printf("deployd version %s\n", version.Version)
+		fmt.Printf("Git SHA: %s\n", version.GitSHA)
+		fmt.Printf("Go Version: %s\n", runtime.Version())
+
 		return
 	}
 
