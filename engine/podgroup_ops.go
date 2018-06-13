@@ -158,7 +158,7 @@ func (op pgOperRefreshInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 		pgCtrl.RUnlock()
 	}()
 
-	if(op.instanceNo > len(pgCtrl.podCtrls)){
+	if op.instanceNo > len(pgCtrl.podCtrls) {
 		log.Warnf("Pod is not exists")
 		return false
 	}
@@ -377,7 +377,7 @@ func (op pgOperDeployInstance) Do(pgCtrl *podGroupController, c cluster.Cluster,
 			pgCtrl.emitChangeEvent("verify", podCtrl.spec, pod, pod.NodeName())
 		}
 	} else {
-		podCtrl.Deploy(c)
+		podCtrl.Deploy(c, []string{})
 		runtime = podCtrl.pod.ImRuntime
 		if runtime.State == RunStateSuccess {
 			pod := podCtrl.pod.Clone()

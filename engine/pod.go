@@ -53,7 +53,7 @@ func (pc *podController) launchEvent(v interface{}) {
 	}
 }
 
-func (pc *podController) Deploy(cluster cluster.Cluster) {
+func (pc *podController) Deploy(cluster cluster.Cluster, extraFilters []string) {
 	if pc.pod.State != RunStatePending {
 		return
 	}
@@ -61,7 +61,6 @@ func (pc *podController) Deploy(cluster cluster.Cluster) {
 	log.Infof("%s deploying", pc)
 	start := time.Now()
 	defer func() {
-		pc.spec.Filters = []string{} // clear the filter
 		pc.pod.UpdatedAt = time.Now()
 		log.Infof("%s deployed, state=%+v, duration=%s", pc, pc.pod.ImRuntime, time.Now().Sub(start))
 	}()
@@ -82,6 +81,7 @@ func (pc *podController) Deploy(cluster cluster.Cluster) {
 		filters = append(filters, filter)
 	}
 
+	filters = append(filters, extraFilters...)
 	for i, cSpec := range pc.spec.Containers {
 		log.Infof("%s create container, filter is %v", pc, filters)
 		id, err := pc.createContainer(cluster, filters, i)
@@ -94,11 +94,6 @@ func (pc *podController) Deploy(cluster cluster.Cluster) {
 		pc.startContainer(cluster, id)
 		pc.pod.Containers[i].Id = id
 		pc.refreshContainer(cluster, i)
-		if i == 0 && pc.pod.Containers[0].NodeName != "" {
-			filter := fmt.Sprintf("constraint:node==%s", pc.pod.Containers[0].NodeName)
-			filters = append(filters, filter)
-			pc.spec.PrevState.NodeName = pc.pod.Containers[i].NodeName
-		}
 		pc.spec.PrevState.IPs[i] = pc.pod.Containers[i].ContainerIp
 	}
 
@@ -139,12 +134,13 @@ func (pc *podController) Drift(cluster cluster.Cluster, fromNode, toNode string,
 	time.Sleep(10 * time.Second)
 	pc.pod.State = RunStatePending
 	pc.pod.DriftCount += 1
+	extraFilters := make([]string, 0, 1)
 	if toNode == "" {
-		pc.spec.Filters = append(pc.spec.Filters, fmt.Sprintf("constraint:node!=%s", fromNode))
+		extraFilters = append(extraFilters, fmt.Sprintf("constraint:node!=%s", fromNode))
 	} else {
-		pc.spec.Filters = append(pc.spec.Filters, fmt.Sprintf("constraint:node==%s", toNode))
+		extraFilters = append(extraFilters, fmt.Sprintf("constraint:node==%s", toNode))
 	}
-	pc.Deploy(cluster)
+	pc.Deploy(cluster, extraFilters)
 	return true
 }
 
@@ -527,7 +523,7 @@ func (pc *podController) createHostConfig(index int) adoc.HostConfig {
 		Resources: adoc.Resources{
 			Memory:               spec.MemoryLimit,
 			MemorySwap:           spec.MemoryLimit, // Memory == MemorySwap means disable swap
-			MemorySwappiness: 	  &swappiness,
+			MemorySwappiness:     &swappiness,
 			CPUPeriod:            CPUQuota,
 			CPUQuota:             int64(spec.CpuLimit*resource.Cpu*CPUMaxPctg) * CPUQuota / int64(CPUMaxLevel*100),
 			BlkioDeviceReadBps:   BlkioDeviceReadBps,

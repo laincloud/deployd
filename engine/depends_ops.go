@@ -265,7 +265,7 @@ func (op depOperDeployInstance) Do(depCtrl *dependsController, c cluster.Cluster
 
 	if !foundDeployed {
 		podCtrl.pod.State = RunStatePending
-		podCtrl.Deploy(c)
+		podCtrl.Deploy(c, []string{})
 		if podCtrl.pod.State == RunStateSuccess {
 			depCtrl.emitChangeEvent("add", newSpec, podCtrl.pod.Clone())
 		}
