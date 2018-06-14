@@ -42,7 +42,7 @@ func TestPodController(t *testing.T) {
 	}
 	pc.pod.State = RunStatePending
 
-	pc.Deploy(c)
+	pc.Deploy(c, []string{})
 	if pc.pod.State != RunStateSuccess {
 		t.Fatal("Pod should be deployed")
 	}
