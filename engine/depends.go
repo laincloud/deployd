@@ -8,6 +8,7 @@ import (
 
 	"github.com/laincloud/deployd/cluster"
 	"github.com/laincloud/deployd/storage"
+	"github.com/laincloud/deployd/utils/util"
 )
 
 // set GarbageCollectTimeout long enough.
@@ -233,15 +234,7 @@ func (depCtrl *dependsController) specifyPodSpec(spec PodSpec, nodeName, namespa
 	spec.Network = fmt.Sprintf("%s_%s", spec.Name, namespace)
 	spec.PrevState = NewPodPrevState(1)
 	spec.Name = fmt.Sprintf("%s-%s-%s", spec.Name, nodeName, namespace)
-	newFilters := make([]string, 0, len(spec.Filters))
-	for _, filter := range spec.Filters {
-		if strings.HasPrefix(filter, "constraint:node==") {
-			continue
-		}
-		newFilters = append(newFilters, filter)
-	}
-	newFilters = append(newFilters, fmt.Sprintf("constraint:node==%s", nodeName))
-	spec.Filters = newFilters
+	spec.Filters = util.AddNodeConstraint(spec.Filters, nodeName)
 	return spec
 }
 
