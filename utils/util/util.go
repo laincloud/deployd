@@ -2,9 +2,11 @@ package util
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/laincloud/deployd/utils/regex"
 )
@@ -75,4 +77,16 @@ func IsConnectionError(err error) bool {
 		}
 	}
 	return false
+}
+
+func AddNodeConstraint(filters []string, nodeName string) []string {
+	newFilters := make([]string, 0, len(filters))
+	for _, filter := range filters {
+		if strings.HasPrefix(filter, "constraint:node==") {
+			continue
+		}
+		newFilters = append(newFilters, filter)
+	}
+	newFilters = append(newFilters, fmt.Sprintf("constraint:node==%s", nodeName))
+	return newFilters
 }

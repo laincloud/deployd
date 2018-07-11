@@ -1,11 +1,11 @@
 package engine
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/laincloud/deployd/cluster"
 	"github.com/laincloud/deployd/storage"
+	"github.com/laincloud/deployd/utils/util"
 	"github.com/mijia/adoc"
 	"github.com/mijia/go-generics"
 	"github.com/mijia/sweb/log"
@@ -134,7 +134,7 @@ func (op pgOperUpgradeInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 
 	// FIXME: do we need to consider hard state flag on upgrade
 	if op.oldPodSpec.IsStateful() && newPodSpec.IsStateful() && prevNodeName != "" {
-		newPodSpec.Filters = append(newPodSpec.Filters, fmt.Sprintf("constraint:node==%s", prevNodeName))
+		newPodSpec.Filters = util.AddNodeConstraint(newPodSpec.Filters, prevNodeName)
 	}
 	podCtrl.spec = newPodSpec
 	podCtrl.pod.State = RunStatePending
@@ -242,7 +242,7 @@ func (op pgOperRefreshInstance) Do(pgCtrl *podGroupController, c cluster.Cluster
 				return false
 			}
 			if newPodSpec.IsStateful() && prevNodeName != "" {
-				newPodSpec.Filters = append(newPodSpec.Filters, fmt.Sprintf("constraint:node==%s", prevNodeName))
+				newPodSpec.Filters = util.AddNodeConstraint(newPodSpec.Filters, prevNodeName)
 			}
 			podCtrl.spec = newPodSpec
 			podCtrl.pod.State = RunStatePending
