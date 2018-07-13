@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	Version    = "2.4.3+git"
+	Version    = "2.4.4+git"
 	APIVersion = "unknown"
 
 	// Git SHA Value will be set during build
