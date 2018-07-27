@@ -599,12 +599,12 @@ func (pc *podController) createNetworkingConfig(index int) adoc.NetworkingConfig
 		net = podSpec.Namespace
 	}
 	nc := adoc.NetworkingConfig{}
-	ipamc := adoc.IPAMConfig{}
-	ipamc.IPv4Address = pc.spec.PrevState.IPs[index]
-	nc.EndpointsConfig = map[string]adoc.EndpointConfig{
-		net: adoc.EndpointConfig{
-			ipamc,
-		},
-	}
+	// ipamc := adoc.IPAMConfig{}
+	// ipamc.IPv4Address = pc.spec.PrevState.IPs[index]
+	// nc.EndpointsConfig = map[string]adoc.EndpointConfig{
+	// 	net: adoc.EndpointConfig{
+	// 		ipamc,
+	// 	},
+	// }
 	return nc
 }
