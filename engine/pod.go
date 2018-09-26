@@ -337,12 +337,13 @@ func (pc *podController) refreshContainer(kluster cluster.Cluster, index int) {
 		prevIP, nowIP := pc.spec.PrevState.IPs[index], info.NetworkSettings.Networks[network].IPAddress
 		// NOTE: if the container's ip is not equal to prev ip, try to correct it; if failed, accpet new ip
 		if prevIP != "" && prevIP != nowIP {
-			log.Warnf("%s find the IP changed, prev is %s, but now is %s, try to correct it", pc, prevIP, nowIP)
-			if !pc.tryCorrectIPAddress(kluster, id, nowIP, prevIP) {
-				log.Warnf("%s fail to correct container ip to %s, accpet new ip %s.", pc, prevIP, nowIP)
-			} else {
-				nowIP = prevIP
-			}
+			// log.Warnf("%s find the IP changed, prev is %s, but now is %s, try to correct it", pc, prevIP, nowIP)
+			// if !pc.tryCorrectIPAddress(kluster, id, nowIP, prevIP) {
+			// 	log.Warnf("%s fail to correct container ip to %s, accpet new ip %s.", pc, prevIP, nowIP)
+			// } else {
+			// 	nowIP = prevIP
+			// }
+			log.Warnf("%s find the IP changed, prev is %s, but now is %s, just accept it.", pc, prevIP, nowIP)
 		}
 
 		container := Container{
